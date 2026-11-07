@@ -1,269 +1,286 @@
 # Kavach — System Architecture
 
-## 1. Project overview
+## 1. Project Overview
 
-Kavach is a consent-based, multilingual voice safety companion designed to identify coercive digital-arrest scams and related financial fraud patterns.
+Kavach is an AI-powered, multilingual voice safety companion designed to detect potential digital-arrest scams during conversations.
 
-The system is intended to analyse speech, identify suspicious conversational patterns, explain its risk assessment and provide timely safety warnings.
+It aims to identify scam patterns such as:
+- Impersonation of police, government officials or other authorities.
+- Threats, intimidation and fabricated legal consequences.
+- Attempts to isolate victims from family members.
+- Pressure to transfer money or disclose financial information.
 
-The architecture is being implemented incrementally. The components described as planned below must not be treated as completed functionality.
+Kavach is an assistance tool, not a guarantee against fraud or a replacement for law enforcement.
 
-## 2. Current implementation
+## 2. Technology Stack
 
-The currently implemented backend flow is:
-
-```text
-User uploads an audio file
-          |
-          v
-FastAPI POST /transcribe
-          |
-          v
-Upload validation
-          |
-          v
-Gnani Prisma v2.5 REST API
-          |
-          v
-Hindi transcription
-          |
-          v
-JSON response to client
-```
-
-### Implemented components
-
-| Component | Technology | Status |
+| Layer | Technology | Purpose |
 |---|---|---|
-| Backend API | FastAPI | Implemented |
-| Configuration | Pydantic Settings | Implemented |
-| HTTP communication | HTTPX | Implemented |
-| Speech-to-text | Gnani Prisma v2.5 REST | Live integration verified |
-| Audio upload | FastAPI multipart upload | Implemented |
-| Automated tests | Pytest | 9 tests passing in latest recorded run |
+| Backend | Python, FastAPI | API and application services |
+| Speech-to-text | Gnani Prisma | Audio transcription |
+| Text-to-speech | Gnani Timbre | Planned spoken warnings |
+| Streaming SDK | `gnani-vachana==0.9.0` | Gnani streaming transcription |
+| HTTP client | HTTPX | Asynchronous REST requests |
+| Testing | Pytest | Automated verification |
+| Frontend | Planned | Responsive safety dashboard |
+| Database | Planned | Secure incident metadata storage |
 
-## 3. Target architecture
+## 3. High-Level Architecture
 
 ```text
-       CONSENTED AUDIO INPUT
-                 |
-                 v
-       AUDIO CAPTURE / UPLOAD
-                 |
-                 v
-          KAVACH BACKEND
-                 |
-                 v
-       GNANI PRISMA SPEECH-TO-TEXT
-                 |
-                 v
-       TRANSCRIPT + TIMESTAMPS
-                 |
-                 v
-       SCAM-STAGE DETECTION
-                 |
-          +------+------+
-          |             |
-          v             v
-     RULE ENGINE   CONTEXTUAL ANALYSIS
-          |             |
-          +------+------+
-                 |
-                 v
-        EXPLAINABLE RISK ENGINE
-                 |
-                 v
-          WARNING POLICY
-                 |
-          +------+------+
-          |             |
-          v             v
-     GNANI TIMBRE   FAMILY NOTIFICATION
-          |             |
-          +------+------+
-                 |
-                 v
-         INCIDENT SUMMARY
+                 User Audio
+                     |
+                     v
+          Kavach Backend (FastAPI)
+                     |
+           +---------+---------+
+           |                   |
+           v                   v
+    REST Transcription    WebSocket Streaming
+           |                   |
+           +---------+---------+
+                     |
+                     v
+              Gnani Prisma
+                     |
+                     v
+              Transcript Text
+                     |
+                     v
+           Scam Detection Engine
+                (Planned)
+                     |
+                     v
+          Explainable Risk Scoring
+                (Planned)
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+     Spoken Warning       Incident Summary
+     Gnani Timbre          (Planned)
+          |
+          v
+    User / Trusted Family
+       (Consent-based)
 ```
 
-This is the intended architecture, not a representation of the current implementation.
+The diagram represents the intended system. Components marked as planned are not yet implemented.
 
-## 4. Backend architecture
+## 4. Current Backend Architecture
 
-The backend is responsible for:
+### 4.1 FastAPI Application
 
-- Receiving audio uploads.
-- Validating input and configuration.
-- Communicating securely with Gnani services.
-- Processing transcription responses.
-- Running detection and risk-assessment components when implemented.
-- Applying warning and notification policies.
-- Exposing API endpoints to the frontend.
+Main application entry point:
 
-The backend must remain the trusted boundary for API credentials and sensitive processing.
+`backend/app/main.py`
 
-## 5. Speech transcription — Gnani Prisma
+Responsibilities:
+- Initialise the FastAPI application.
+- Register the health endpoint.
+- Register the REST transcription endpoint.
+- Register the WebSocket streaming router.
 
-### Current integration
+### 4.2 Configuration Management
 
-- Provider: Gnani AI.
-- Model: Prisma v2.5.
-- Integration type: REST.
-- Endpoint: `https://api.vachana.ai/stt/v3`
-- Initial language configuration: `hi-IN`.
+File:
 
-The current endpoint accepts an uploaded audio file and returns the transcription and available provider metadata.
+`backend/app/config.py`
 
-### Planned real-time integration
+Responsibilities:
+- Load environment variables.
+- Read Gnani API credentials securely from the backend environment.
+- Configure the transcription endpoint and language.
+- Provide application settings through a cached settings function.
 
-The next speech milestone is to investigate and implement the documented Prisma WebSocket streaming interface.
+Secrets must remain in `backend/.env`. The file must never be committed to GitHub.
 
-The implementation must verify:
+### 4.3 REST Transcription
 
-- Authentication headers.
-- Supported model identifiers.
-- Audio encoding and sample rate.
-- Frame size and message format.
-- Partial and final transcription events.
-- Error messages and connection closure.
-- Reconnection and recovery behaviour.
+Endpoint:
 
-Do not assume that the REST and WebSocket APIs use identical request formats.
+`POST /transcribe`
 
-## 6. Scam-stage detection
+Flow:
 
-The planned detection engine will identify four major conversational patterns:
+1. The client uploads an audio file.
+2. FastAPI validates the file extension and size.
+3. The backend checks that the Gnani API key is configured.
+4. The backend sends the audio to Gnani Prisma using HTTPX.
+5. The backend validates the provider response.
+6. The transcript and relevant metadata are returned.
 
-1. **Impersonation:** Someone claims to represent police, government agencies, courts or another authority.
-2. **Threats and fear:** The caller uses arrest threats, legal consequences or intimidation.
-3. **Isolation:** The caller instructs the victim not to speak with family, friends or other trusted people.
-4. **Financial extraction:** The caller requests money transfers, payments, OTPs, banking credentials or other sensitive financial information.
+Error handling covers missing configuration, invalid input, oversized files, provider HTTP errors, invalid responses and request timeouts.
 
-The detection system will combine:
+Verification status: One successful live request through the Kavach backend has been recorded. Automated REST tests use mocked provider responses.
 
-- Fast, deterministic rule-based triggers.
-- Contextual analysis for interpreting conversational meaning.
-- Evidence-backed stage classification.
-- A risk engine that considers the combination and progression of suspicious signals.
+### 4.4 WebSocket Streaming Transcription
 
-A single keyword must not automatically establish that a call is fraudulent. Legitimate conversations can contain words associated with scams.
+File:
 
-## 7. Explainable risk engine
+`backend/app/streaming.py`
 
-Every detected risk signal should retain:
+Endpoint:
 
-- Detection category.
-- Supporting transcript excerpt.
-- Timestamp or available timing reference.
-- Detection method.
-- Confidence or severity information, where supported.
+`/ws/transcribe`
 
-Risk thresholds must be calibrated using a validation dataset.
+Flow:
 
-The system must distinguish between:
+1. The browser establishes a WebSocket connection with Kavach.
+2. The backend creates a Gnani streaming client.
+3. The backend connects to Gnani using server-side credentials.
+4. The backend starts a provider-event monitoring task.
+5. The browser sends binary PCM audio frames.
+6. The backend validates frame sizes and forwards valid frames to Gnani.
+7. Gnani connection, processing and transcript events are forwarded to the browser as JSON messages.
+8. Provider errors and unexpected provider event-stream termination are handled by notifying the browser and closing the session.
+9. Invalid audio-frame errors are delivered before the browser connection is closed.
+10. A Stop command causes the backend to send paced silence frames to help detect the end of speech.
+11. The backend waits for a transcript event received after the Stop command, subject to a timeout.
+12. The backend closes the provider connection and cleans up background tasks.
 
-- No detected warning signals.
-- Suspicious conversational behaviour.
-- High-risk coercive behaviour.
-- Explicit financial or credential extraction attempts.
+The backend uses a single outgoing WebSocket writer task to avoid concurrent server-to-client writes. Important outgoing messages can be acknowledged before the session is closed.
 
-The score is an assistance signal, not a legal finding or a guarantee of fraud.
+The Stop response does not guarantee provider finalisation of the last utterance.
 
-## 8. Warning and speech generation
+Current audio format:
 
-Gnani Timbre is planned for generating spoken safety warnings.
+| Parameter | Value |
+|---|---|
+| Sample rate | 16,000 Hz |
+| Channels | 1 (mono) |
+| Encoding | Signed 16-bit little-endian PCM |
+| Frame size | 1,024 bytes |
+| Frame duration | 32 milliseconds |
 
-The warning policy should:
+Calculation:
 
-- Prioritise clear and actionable guidance.
-- Avoid repeatedly interrupting the conversation.
-- Apply warning cooldowns.
-- Avoid generating unsupported accusations.
-- Support Hindi and other verified languages.
+- 16,000 samples/second × 2 bytes/sample = 32,000 bytes/second.
+- 1,024 bytes ÷ 32,000 bytes/second = 0.032 seconds per frame.
+- 32 silence frames = 32 × 0.032 = 1.024 seconds.
 
-TTS integration must be tested against the actual account's available model, voice and response format.
+Verification status:
 
-The audio pipeline must also prevent Kavach's own generated speech from being incorrectly treated as caller speech.
+- WebSocket implementation: completed.
+- Mocked WebSocket tests: 9 passed.
+- Complete backend automated tests: 18 passed, 1 warning.
+- Live streaming with the actual Gnani provider: pending.
 
-## 9. Trusted-family notifications
+## 5. Planned Scam Detection Architecture
 
-Notifications will be optional and consent-based.
+The detection engine will combine two approaches.
 
-Planned safeguards:
+### 5.1 Rule-Based Detection
 
-- Explicit user consent.
-- Verified trusted-contact registration.
-- Minimal information sharing.
-- No default sharing of complete audio recordings.
-- Clear indication that a notification is an automated safety alert.
+Fast detection of high-risk phrases and patterns, including:
+- Digital-arrest claims.
+- Fake police or agency impersonation.
+- Threats of immediate arrest.
+- Instructions to remain isolated.
+- Demands for money transfers.
 
-The notification system must not contact arbitrary numbers or share sensitive information without authorisation.
+Rules will generate evidence signals, not automatically establish that a scam has occurred.
 
-## 10. Incident summaries
+### 5.2 Contextual Detection
 
-Kavach will generate a structured incident summary containing, where available:
+A contextual reasoning component will analyse conversation meaning, progression and relationships between statements.
 
-- Incident date and time.
-- Detected scam stages.
-- Relevant transcript excerpts.
-- Supporting timestamps.
-- Requested financial or credential actions.
-- Warnings issued.
-- User-provided incident notes.
+It will help distinguish legitimate discussions from coordinated scam behaviour and reduce reliance on individual keywords.
 
-The document will be an assistance tool for reporting, not an official police record or independently authenticated evidence.
+### 5.3 Explainable Risk Scoring
 
-## 11. Kavach-Bench
+The risk engine will combine detection signals into a score and risk category.
 
-The planned benchmark will evaluate detection under:
+Every important risk assessment should include:
+- Detected behaviour.
+- Supporting transcript evidence.
+- Relevant timestamps.
+- Explanation of the risk contribution.
 
-- Clean audio.
-- Telephony-style compressed audio.
-- Noisy audio.
+Scoring weights and thresholds must be validated through testing rather than chosen arbitrarily.
 
-Evaluation metrics will include:
+## 6. Planned Safety Response
 
-- Precision.
-- Recall.
-- False-positive rate.
-- False-negative rate.
-- Stage-level F1 score.
-- Time-to-warning.
-- p50 and p95 processing latency.
+When the system identifies sufficiently concerning behaviour:
 
-Synthetic test data must be clearly labelled. Synthetic results alone cannot establish real-world detection accuracy.
+1. Generate a clear explanation of the detected risk.
+2. Produce a spoken warning using Gnani Timbre.
+3. Explain safe actions, such as ending the call and independently verifying the caller.
+4. Offer trusted-family notification only with the user's consent.
+5. Generate an incident summary that can support a cybercrime report.
 
-## 12. Security and privacy
+## 7. Privacy and Security
 
-- Keep Gnani API keys on the backend.
-- Never commit `.env`.
-- Obtain consent before analysing audio.
-- Minimise sensitive data retention.
-- Validate uploaded files and enforce request-size limits.
-- Avoid logging API keys, complete transcripts or sensitive personal information.
-- Secure all trusted-contact and notification workflows.
-- Apply appropriate access controls before deployment.
+- Keep API credentials exclusively on the backend.
+- Use secure communication between application components.
+- Validate uploaded files and incoming audio frames.
+- Avoid unnecessary audio retention.
+- Obtain consent before sharing information with trusted contacts.
+- Avoid exposing raw provider exceptions or sensitive credentials.
+- Apply appropriate authentication, origin restrictions and rate limits before production deployment.
 
-## 13. Platform limitations
+## 8. Testing Architecture
 
-The initial prototype analyses uploaded recordings or consented speakerphone/room audio.
+Automated tests are maintained under:
 
-It does not directly intercept native cellular-call audio.
+`backend/tests/`
 
-Browser microphone access and native mobile call recording are different capabilities and must not be presented as equivalent.
+Current test files:
+- `test_transcribe.py`
+- `test_streaming.py`
 
-## 14. Architectural implementation policy
+Current verification:
+- 18 automated backend tests passing, with one Starlette deprecation warning.
+- One successful live REST transcription request.
+- Nine mocked WebSocket test functions covering normal operation and failure scenarios.
+- Live Gnani WebSocket integration is not yet verified.
 
-Implement the architecture incrementally.
+Additional planned testing:
+- Hindi and Hinglish recognition.
+- Clean, compressed and noisy audio.
+- Legitimate-call versus scam-call classification.
+- False-positive and false-negative analysis.
+- Warning latency.
+- Network interruption and recovery.
+- Privacy and security checks.
 
-Before adding a new component:
+## 9. Repository Structure
 
-1. Verify its official API contract.
-2. Confirm account and model access.
-3. Define request and response schemas.
-4. Implement error handling.
-5. Add automated tests.
-6. Test actual integration where credentials and access permit.
-7. Update project documentation.
+```text
+Kavach/
+|
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   └── streaming.py
+│   │
+│   ├── tests/
+│   │   ├── test_transcribe.py
+│   │   └── test_streaming.py
+│   │
+│   ├── .env.example
+│   └── requirements.txt
+│
+├── ARCHITECTURE.md
+├── IMPLEMENTATION_LOG.md
+├── PROJECT_STATE.md
+├── TEST_REPORT.md
+├── TROUBLESHOOTING.md
+├── README.md
+└── .gitignore
+```
 
-Optional models or fallback services must be disclosed accurately.
+This structure reflects the current known implementation. Additional modules will be added as features are developed.
+
+## 10. Immediate Engineering Priorities
+
+1. Verify live Gnani streaming authentication and connection.
+2. Test real transcript events using Hindi audio.
+3. Verify Stop behaviour and provider connection cleanup.
+4. Measure actual streaming latency.
+5. Review WebSocket security, authentication and resource limits.
+6. Verify Gnani Timbre access and integrate text-to-speech.
+7. Implement the scam detection engine.
+8. Add explainable risk scoring and safety responses.
+9. Build the frontend and complete end-to-end testing.

@@ -1,88 +1,99 @@
-
 # Kavach — Project State
 
-## Current milestone
+## Project Overview
 
-Milestone 1 — Backend setup and Gnani Prisma REST transcription integration.
+Kavach is an AI-powered, multilingual voice safety companion designed to identify potential digital-arrest scams and provide timely, explainable warnings.
 
-## Overall status
+The project uses Gnani AI speech models for transcription and speech generation.
 
-Backend scaffold and initial real API integration are implemented and verified.
+## Current Development Status
 
-## Completed
+**Milestone 0 — Project scaffold: Completed**
 
-- [x] GitHub repository created: https://github.com/vaibhavi466/Kavach
-- [x] Initial repository scaffold pushed to the main branch.
-- [x] Python 3.11.9 virtual environment configured.
-- [x] FastAPI backend created.
-- [x] GET /health endpoint implemented and tested.
-- [x] Gnani API credentials configured through backend environment variables.
-- [x] Gnani Prisma v2.5 REST API connectivity verified.
-- [x] POST /transcribe endpoint implemented.
-- [x] Hindi transcription tested using an actual audio recording.
-- [x] Upload extension validation and 10 MB application-level limit implemented.
-- [x] Upstream timeout, HTTP error and invalid JSON handling implemented.
-- [x] Client-provided filenames and MIME types are not forwarded directly.
-- [x] Nine automated backend tests passing.
+- Created the GitHub repository and initial backend structure.
+- Configured the Python virtual environment.
+- Created the FastAPI application and `/health` endpoint.
+- Added environment-variable templates and Git ignore rules.
+- Created initial project documentation and automated tests.
 
-## Current backend implementation
+**Milestone 1 — Gnani Prisma REST transcription: Implemented and verified**
 
-- Framework: FastAPI
-- Language: Python 3.11.9
-- STT provider: Gnani Prisma v2.5
-- Integration: REST API
-- STT endpoint: https://api.vachana.ai/stt/v3
-- Configured language: hi-IN
-- Upload formats allowed by extension: WAV, MP3, OGG, FLAC, AAC and M4A.
-- Maximum application-level upload size: 10 MB.
+- Integrated Gnani Prisma REST transcription.
+- Added `POST /transcribe` for audio uploads.
+- Added API-key configuration through environment variables.
+- Added input validation, file-size limits and provider error handling.
+- Verified one real audio request through the Kavach backend.
+- Added automated tests for REST transcription.
 
-## Architecture decisions
+## Milestone 2 — Gnani Prisma WebSocket streaming
 
-- Frontend: React + TypeScript, planned.
-- Backend: Python + FastAPI.
-- Realtime transport: WebSocket, subject to API contract verification.
-- Detection: deterministic, evidence-backed rules first; contextual reasoning optional.
-- Secrets: backend environment only. Never commit .env.
-- Audio analysis: consent-based.
-- Initial demo: consented speakerphone or room audio; no native cellular-call interception.
+**Implemented and mock-tested; live integration pending.**
 
-## Verified live integration
+- Added `backend/app/streaming.py`.
+- Implemented the `/ws/transcribe` WebSocket endpoint.
+- Integrated the Gnani streaming SDK.
+- Added PCM audio-frame validation and forwarding.
+- Added provider-event forwarding to the browser.
+- Added Stop handling and paced silence frames.
+- Added provider error handling and unexpected event-stream termination handling.
+- Added invalid-frame rejection and initial provider connection failure handling.
+- Improved WebSocket message delivery and cleanup behaviour.
+- Added nine mocked WebSocket test functions covering normal operation and lifecycle failures.
+- Added SDK constructor failure handling and its automated test.
 
-A real audio recording was submitted through the Kavach backend to Gnani Prisma v2.5.
+Important limitation: Live WebSocket transcription against Gnani has not yet been verified. Passing mocked tests does not establish live provider connectivity.
 
-- HTTP response: 200 OK
-- Transcript returned successfully in Hindi.
-- Provider request ID and latency fields returned.
-- The actual API key was kept outside the repository.
+## Current Test Status
 
-This live request is separate from the automated tests, which mock the Gnani service.
+- Automated backend tests: 18 passed, 0 failed, 1 warning.
+- REST and health automated tests: 9 passed.
+- WebSocket automated tests: 9 passed.
+- WebSocket tests use a mocked Gnani SDK client.
+- REST integration: One successful live request verified.
+- Live WebSocket provider verification: Pending.
+- Starlette TestClient deprecation warning: Under investigation.
 
-## Known issues and limitations
+## Implemented Components
 
-- Starlette emits a deprecation warning concerning its httpx TestClient integration.
-- The 10 MB check is performed inside the endpoint; deployment-level request-body limits are still required.
-- File extension validation does not establish that uploaded bytes contain valid audio.
-- No real-time WebSocket transcription yet.
-- No scam-stage detection or risk scoring yet.
-- No Gnani Timbre speech generation yet.
-- No trusted-family notifications yet.
-- No incident report generation yet.
-- No Kavach-Bench evaluation yet.
-- No frontend yet.
+| Component | Status |
+|---|---|
+| FastAPI backend | Implemented |
+| Health endpoint | Implemented and tested |
+| Gnani Prisma REST transcription | Implemented and live-tested |
+| Gnani Prisma WebSocket endpoint | Implemented and mock-tested |
+| WebSocket failure handling | Implemented and mock-tested |
+| Environment configuration | Implemented |
+| Automated tests | 18 passing, 1 warning |
 
-## Pending milestones
+## Pending Components
 
-1. Complete backend security and API contract review.
-2. Reconcile documentation and commit the verified backend milestone.
-3. Verify Gnani Timbre access and actual response format.
-4. Implement and test real-time Prisma WebSocket transcription.
-5. Build the explainable scam-stage detection engine.
-6. Implement warning policy and speech generation.
-7. Build frontend and consent workflow.
-8. Add family notifications and incident summaries.
-9. Build Kavach-Bench and evaluate false positives, false negatives and latency.
-10. Complete deployment and hackathon demonstration.
+1. Verify live Gnani WebSocket transcription.
+2. Integrate Gnani Timbre text-to-speech.
+3. Implement scam-stage detection.
+4. Implement hybrid rule-based and contextual detection.
+5. Implement explainable risk scoring.
+6. Implement spoken safety warnings.
+7. Implement consent-based trusted-family notifications.
+8. Implement incident summaries.
+9. Develop Kavach-Bench.
+10. Build the frontend dashboard.
+11. Complete security, performance and end-to-end testing.
 
-## Next action
+## Important Engineering Constraints
 
-Finish documentation, inspect Git changes, verify secrets and audio files are excluded, rerun tests, then commit and push the verified milestone.
+- Never expose the Gnani API key to the frontend or GitHub.
+- Never claim mocked functionality has been verified against a live provider.
+- Preserve consent-based audio processing and minimise data retention.
+- Record actual test results in `TEST_REPORT.md`.
+- Update project documentation after every verified milestone.
+
+## Immediate Next Steps
+
+1. Verify live Gnani Prisma WebSocket authentication and connection.
+2. Test real-time Hindi transcription and transcript events.
+3. Verify Stop behaviour and connection cleanup with the actual provider.
+4. Record actual streaming behaviour and latency.
+5. Complete the backend security and API contract review.
+6. Commit and push the verified WebSocket implementation after code review.
+7. Verify Gnani Timbre access and actual response format.
+8. Begin scam-stage detection implementation.

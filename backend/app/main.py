@@ -4,13 +4,14 @@ import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 
 from app.config import Settings, get_settings
-
+from app.streaming import router as streaming_router
 
 app = FastAPI(
     title="Kavach API",
     description="Consent-based voice safety companion prototype.",
     version="0.2.0",
 )
+app.include_router(streaming_router)
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_AUDIO_EXTENSIONS = {
