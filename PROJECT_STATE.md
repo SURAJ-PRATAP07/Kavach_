@@ -25,3 +25,17 @@ Milestone 0 — repository and environment scaffold.
 
 ## Next step
 Create the public GitHub repository, initialise Git, install dependencies, run `/health` and `pytest`, then perform the Prisma connectivity spike.
+
+
+## Verified Progress
+
+- FastAPI backend environment created and activated.
+- Health endpoint tested successfully.
+- Pytest executed successfully: 1 passed, 0 failed.
+- Starlette/httpx deprecation warning noted for investigation.
+
+## Pending
+
+- Confirm GitHub repository creation and initial push.
+- Verify Gnani API credentials and official API contracts.
+- Implement and test Prisma transcription integration.
