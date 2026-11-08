@@ -45,13 +45,12 @@ Important limitation: Live WebSocket transcription against Gnani has not yet bee
 
 ## Current Test Status
 
-- Automated backend tests: 18 passed, 0 failed, 1 warning.
+- Automated backend tests: 19 passed, 0 failed, 1 warning.
 - REST and health automated tests: 9 passed.
-- WebSocket automated tests: 9 passed.
+- WebSocket automated tests: 10 passed.
 - WebSocket tests use a mocked Gnani SDK client.
 - REST integration: One successful live request verified.
-- Live WebSocket provider verification: Pending.
-- Starlette TestClient deprecation warning: Under investigation.
+- Live Gnani WebSocket integration: Not yet verified.
 
 ## Implemented Components
 
@@ -63,7 +62,7 @@ Important limitation: Live WebSocket transcription against Gnani has not yet bee
 | Gnani Prisma WebSocket endpoint | Implemented and mock-tested |
 | WebSocket failure handling | Implemented and mock-tested |
 | Environment configuration | Implemented |
-| Automated tests | 18 passing, 1 warning |
+| Automated tests | 19 passing, 1 warning |
 
 ## Pending Components
 

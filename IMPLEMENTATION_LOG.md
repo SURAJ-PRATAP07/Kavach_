@@ -231,3 +231,26 @@ Live Gnani WebSocket integration remains pending.
 9. Build the frontend and consent workflow.
 10. Add trusted-family notifications, incident summaries and Kavach-Bench.
 11. Complete deployment and hackathon demonstration.
+
+---
+
+## Milestone 2.2 — Browser-disconnect cleanup test
+
+**Status: Implemented and automated-test verified**
+
+Added a test verifying that the mocked Gnani streaming client is closed when the browser disconnects during an active WebSocket session.
+
+Implementation details:
+- Added a `threading.Event` to the fake Gnani client.
+- The event is signalled when the client's asynchronous `close()` method executes.
+- The test waits for the cleanup signal and verifies that the provider client is closed.
+- This verifies the backend cleanup path with a mocked provider; it does not verify live Gnani WebSocket behaviour.
+
+Latest complete backend test run:
+- 19 passed, 0 failed, 1 warning.
+- REST and health tests: 9.
+- WebSocket tests: 10.
+
+The Starlette/httpx deprecation warning remains non-failing.
+
+Live Gnani WebSocket authentication, transcription and streaming latency remain unverified.

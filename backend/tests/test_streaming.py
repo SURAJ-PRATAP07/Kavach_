@@ -1,6 +1,6 @@
-
 import asyncio
 import json
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -44,7 +44,6 @@ class FakeGnaniStreamClient:
     provider_error_after_silence_frames = None
     end_events_after_silence_frames = None
 
-   
     async def connect(self):
         if self.__class__.connect_failure:
             raise RuntimeError("Simulated Gnani connection failure")
@@ -100,10 +99,12 @@ class FakeGnaniStreamClient:
         self.silence_count = 0
         self.event_queue = asyncio.Queue()
         self.closed = False
+        self.cleanup_event = threading.Event()
         self.instances.append(self)
 
     async def close(self):
         self.closed = True
+        self.cleanup_event.set()
         await self.event_queue.put(None)
 
 
@@ -135,7 +136,6 @@ def configured_client(monkeypatch):
         yield client
 
     app.dependency_overrides.pop(get_settings, None)
-
 
 def test_websocket_stream_and_stop(configured_client):
     """Test connection, audio forwarding and final transcript."""
@@ -184,6 +184,29 @@ def test_websocket_stream_and_stop(configured_client):
     assert len(fake_client.audio_chunks) == 33
     assert fake_client.closed is True
 
+
+def test_websocket_closes_provider_when_browser_disconnects(
+    configured_client,
+):
+    """Provider resources must be released when the browser disconnects."""
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        ready = websocket.receive_json()
+
+        assert ready["type"] == "ready"
+
+        fake_client = FakeGnaniStreamClient.instances[-1]
+        assert fake_client.closed is False
+
+        # Simulate the browser closing its WebSocket connection.
+        websocket.close()
+
+    # Wait for the server's asynchronous cleanup to finish.
+    assert fake_client.cleanup_event.wait(timeout=2.0), (
+        "The Gnani provider session was not closed after browser disconnect."
+    )
+
+    assert fake_client.closed is True
 
 def test_websocket_rejects_missing_api_key(monkeypatch):
     """The endpoint must not connect to Gnani without credentials."""

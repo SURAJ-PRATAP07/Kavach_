@@ -162,8 +162,8 @@ Calculation:
 Verification status:
 
 - WebSocket implementation: completed.
-- Mocked WebSocket tests: 9 passed.
-- Complete backend automated tests: 18 passed, 1 warning.
+- Mocked WebSocket tests: 10 passed.
+- Complete backend automated tests: 19 passed, 1 warning.
 - Live streaming with the actual Gnani provider: pending.
 
 ## 5. Planned Scam Detection Architecture
@@ -230,9 +230,9 @@ Current test files:
 - `test_streaming.py`
 
 Current verification:
-- 18 automated backend tests passing, with one Starlette deprecation warning.
+- 19 automated backend tests passing, with one Starlette deprecation warning.
 - One successful live REST transcription request.
-- Nine mocked WebSocket test functions covering normal operation and failure scenarios.
+- Ten mocked WebSocket test functions covering normal operation and failure scenarios.
 - Live Gnani WebSocket integration is not yet verified.
 
 Additional planned testing:

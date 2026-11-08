@@ -17,13 +17,13 @@
 
 Latest complete backend test run:
 
-**18 passed, 0 failed, 1 warning.**
+**19 passed, 0 failed, 1 warning.**
 
 | Test group | Tests | Result |
 |---|---:|---|
 | Health and REST transcription | 9 | PASS |
-| WebSocket streaming and lifecycle | 9 | PASS |
-| **Total** | **18** | **PASS** |
+| WebSocket streaming and lifecycle | 10 | PASS |
+| **Total** | **19** | **PASS** |
 
 Command:
 
@@ -31,7 +31,7 @@ Command:
 python -m pytest backend/tests -q
 ```
 
-Actual output:
+Previous verification run output:
 
 ```
 .................. [100%]
@@ -43,6 +43,26 @@ The warning is a Starlette deprecation warning concerning the
 `httpx` TestClient integration. It did not cause test failures.
 
 The warning remains under investigation. No dependency changes have been made solely to suppress it.
+
+### Latest verification — Browser-disconnect cleanup
+
+Commands executed:
+
+```powershell
+python -m py_compile backend\app\streaming.py backend\tests\test_streaming.py
+python -m pytest backend/tests -q
+git diff --check
+```
+
+Actual result:
+
+```
+19 passed, 1 warning in 5.64s
+```
+
+`git diff --check` completed without reporting whitespace errors.
+
+The additional browser-disconnect test verifies mocked provider cleanup. Live Gnani WebSocket integration remains unverified.
 
 ---
 
@@ -104,8 +124,9 @@ The WebSocket tests use a mocked Gnani streaming client. They verify the backend
 | WS-009 | Unexpected provider stream end | Browser notified and session terminated | Error received, connection closed | PASS |
 | WS-010 | Provider connection failure | Safe error returned and connection closed | Error received, connection closed | PASS |
 | WS-011 | SDK constructor failure | Safe error returned and connection closed | Error received, connection closed | PASS |
+| WS-012 | Browser disconnect cleanup | Provider client is closed after browser disconnect | Cleanup event received; client closed | PASS |
 
-The eleven detailed assertions above are covered across nine WebSocket test functions in `backend/tests/test_streaming.py`.
+The twelve detailed assertions above are covered across ten WebSocket test functions in `backend/tests/test_streaming.py`.
 
 ### Streaming configuration verified by tests
 
@@ -238,8 +259,8 @@ The installed dependency combination requires further compatibility investigatio
 | Gnani Prisma REST integration | Live integration PASS |
 | REST automated tests | 9 PASS |
 | WebSocket endpoint | Implemented |
-| WebSocket mocked tests | 9 PASS |
-| Complete backend automated tests | 18 PASS, 1 warning |
+| WebSocket mocked tests | 10 PASS |
+| Complete backend automated tests | 19 PASS, 1 warning |
 | Live WebSocket integration | NOT TESTED |
 | Scam detection | Not implemented |
 | Risk scoring | Not implemented |
@@ -248,4 +269,4 @@ The installed dependency combination requires further compatibility investigatio
 | Frontend | Not implemented |
 | Kavach-Bench | Not implemented |
 
-**Conclusion:** The current backend has 18 passing automated tests and one separately verified live Gnani Prisma REST integration. WebSocket streaming and its tested failure-handling paths have passed mocked automated tests. Live WebSocket integration remains pending. No scam-detection accuracy or production-readiness claims can yet be made.
+**Conclusion:** The current backend has 19 passing automated tests and one separately verified live Gnani Prisma REST integration. WebSocket streaming and its tested failure-handling paths have passed mocked automated tests. Live WebSocket integration remains pending. No scam-detection accuracy or production-readiness claims can yet be made.
