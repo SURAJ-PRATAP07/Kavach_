@@ -44,15 +44,7 @@ class FakeGnaniStreamClient:
     provider_error_after_silence_frames = None
     end_events_after_silence_frames = None
 
-    def __init__(self, **kwargs):
-        if self.__class__.constructor_failure:
-            raise RuntimeError("Simulated SDK constructor failure")
-        self.kwargs = kwargs
-        self.audio_chunks = []
-        self.silence_count = 0
-        self.event_queue = asyncio.Queue()
-        self.instances.append(self)
-
+   
     async def connect(self):
         if self.__class__.connect_failure:
             raise RuntimeError("Simulated Gnani connection failure")
@@ -99,7 +91,19 @@ class FakeGnaniStreamClient:
 
             yield event
 
+    def __init__(self, **kwargs):
+        if self.__class__.constructor_failure:
+            raise RuntimeError("Simulated SDK constructor failure")
+
+        self.kwargs = kwargs
+        self.audio_chunks = []
+        self.silence_count = 0
+        self.event_queue = asyncio.Queue()
+        self.closed = False
+        self.instances.append(self)
+
     async def close(self):
+        self.closed = True
         await self.event_queue.put(None)
 
 
@@ -178,6 +182,7 @@ def test_websocket_stream_and_stop(configured_client):
     assert fake_client.audio_chunks[0] == audio_frame
     assert fake_client.silence_count == 32
     assert len(fake_client.audio_chunks) == 33
+    assert fake_client.closed is True
 
 
 def test_websocket_rejects_missing_api_key(monkeypatch):
@@ -333,4 +338,3 @@ def test_websocket_handles_sdk_constructor_failure(
 
         with pytest.raises(WebSocketDisconnect):
             websocket.receive_json()
-

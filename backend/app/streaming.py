@@ -94,6 +94,7 @@ async def stream_transcription(
     event_task = None
     failure_task = None
     stop_disconnect_task = None
+    receive_task = None
 
     async def send_outgoing_messages():
         """Ensure only one task writes messages to the browser."""
@@ -286,15 +287,17 @@ async def stream_transcription(
         tasks = [
             task
             for task in (
+                receive_task,
                 stop_disconnect_task,
                 failure_task,
                 event_task,
             )
-            if task is not None and not task.done()
+            if task is not None
         ]
 
         for task in tasks:
-            task.cancel()
+            if not task.done():
+                task.cancel()
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -345,7 +348,7 @@ async def stream_transcription(
             timeout=CONNECT_TIMEOUT_SECONDS,
         )
 
-        await enqueue_message(
+        ready_sent = await enqueue_message(
             {
                 "type": "ready",
                 "message": "Connected to Kavach streaming transcription.",
@@ -358,6 +361,8 @@ async def stream_transcription(
             },
             wait_until_sent=True,
         )
+        if not ready_sent:
+            raise SessionFailure("writer_failure")
 
         event_task = asyncio.create_task(forward_provider_events())
         failure_task = asyncio.create_task(monitor_session())
@@ -376,6 +381,7 @@ async def stream_transcription(
                     receive_task,
                     return_exceptions=True,
                 )
+                receive_task = None
 
                 failure_reason = failure_task.result()
 
@@ -398,6 +404,7 @@ async def stream_transcription(
                 break
 
             message = receive_task.result()
+            receive_task = None
 
             if message["type"] == "websocket.disconnect":
                 break
@@ -498,7 +505,6 @@ async def stream_transcription(
     except WebSocketDisconnect:
         pass
 
-    
     except SessionFailure as exc:
         failure_reason = str(exc)
 
