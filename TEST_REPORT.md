@@ -17,13 +17,14 @@
 
 Latest complete backend test run:
 
-**19 passed, 0 failed, 1 warning.**
+**27 passed, 0 failed, 1 warning.**
 
 | Test group | Tests | Result |
 |---|---:|---|
 | Health and REST transcription | 9 | PASS |
 | WebSocket streaming and lifecycle | 10 | PASS |
-| **Total** | **19** | **PASS** |
+| TTS service and endpoint | 8 | PASS |
+| **Total** | **27** | **PASS** |
 
 Command:
 
@@ -57,12 +58,12 @@ git diff --check
 Actual result:
 
 ```
-19 passed, 1 warning in 3.23s
+27 passed, 1 warning in 2.90s
 ```
 
 `git diff --check` completed without reporting whitespace errors.
 
-The additional browser-disconnect test verifies provider cleanup using a mocked client. Separately, live Gnani Prisma WebSocket integration was verified with one Hindi recording on 2026-11-08. See Section 6 for the observed results and limitations.
+The browser-disconnect test verifies provider cleanup using a mocked client. The latest complete backend run also includes eight TTS tests. Separately, live Gnani Prisma WebSocket integration was verified with one Hindi recording on 2026-11-08. See Sections 6 and 8 for live integration results and limitations.
 
 ---
 
@@ -205,7 +206,100 @@ The `transcript_received_after_stop_command` field was `false` in the observed r
 
 ---
 
-## 7. Warnings
+## 7. Gnani Timbre TTS automated tests
+
+The TTS test suite contains five service tests and three endpoint tests. Provider interactions are mocked in automated tests; these tests do not consume live Gnani API credits.
+
+### TTS service tests
+
+| ID | Test | Expected result | Result |
+|---|---|---|---|
+| TTS-001 | Successful warning synthesis | Two segments combined into a valid WAV with the configured silence interval | PASS |
+| TTS-002 | Provider configuration | Correct model, voice, language, speed and audio configuration supplied | PASS |
+| TTS-003 | Missing API key | Request rejected before provider client initialisation | PASS |
+| TTS-004 | Malformed provider WAV | Invalid provider audio rejected safely | PASS |
+| TTS-005 | Provider synthesis failure | Failure mapped to a safe service error identifying the segment | PASS |
+
+### TTS endpoint tests
+
+| ID | Test | Expected result | Result |
+|---|---|---|---|
+| TTS-006 | Successful endpoint response | WAV returned with `audio/wav` content type | PASS |
+| TTS-007 | Missing API key | HTTP 503 returned | PASS |
+| TTS-008 | Provider failure | HTTP 502 returned without exposing provider details | PASS |
+
+### TTS configuration covered by tests
+
+| Parameter | Value |
+|---|---|
+| Provider model | `timbre-v3.0` |
+| Voice | `Tarika` |
+| Language | `hi-IN` |
+| Speed | `0.85` |
+| Sample rate | 16,000 Hz |
+| Channels | Mono |
+| Sample width | 16-bit |
+| Encoding | Linear PCM |
+| Warning segments | 2 |
+| Silence between segments | 350 ms |
+
+The service validates the provider WAV response, extracts PCM audio and rebuilds a standard WAV response. The synchronous SDK call is executed in a thread pool by the asynchronous FastAPI endpoint.
+
+---
+
+## 8. Live Gnani Timbre TTS endpoint verification
+
+**Date:** 2026-11-09
+
+The live TTS endpoint was called through the local Kavach FastAPI backend using the actual Gnani Timbre service.
+
+| Check | Actual observation |
+|---|---|
+| Endpoint | `POST /synthesize-warning` |
+| Provider model | `timbre-v3.0` |
+| Voice | `Tarika` |
+| Language | `hi-IN` |
+| Speed | `0.85` |
+| HTTP status | 200 OK |
+| Content type | `audio/wav` |
+| Audio encoding | 16-bit PCM |
+| Sample rate | 16,000 Hz |
+| Channels | Mono |
+| WAV frames | 64,330 |
+| WAV duration | 4.020625 seconds (~4.021 seconds) |
+| Playback | User-confirmed complete and understandable |
+| Result | PASS for this live endpoint test |
+
+The generated warning contained these two romanized Hindi segments:
+
+1. `Apna one-time password.`
+2. `Kisi ke saath share na karein.`
+
+A 350 ms silence interval was inserted between the segments.
+
+### WAV duration calculation
+
+For the returned mono audio:
+
+\[
+\text{Duration} =
+\frac{\text{Number of frames}}{\text{Sample rate}}
+\]
+
+\[
+= \frac{64,330}{16,000}
+= 4.020625 \text{ seconds}
+\]
+
+This is the duration of the combined WAV file, including the inserted silence.
+
+**Scope and limitations:** The user confirmed that these two warning segments were complete and understandable during playback. This does not establish broad Hindi or Hinglish speech quality, Devanagari pronunciation quality, or quality across other warning phrases and voices.
+
+**Integration boundary:** The TTS endpoint currently operates independently. It has not yet been connected to WebSocket transcription, scam-stage detection or an automated warning policy.
+
+---
+
+## 9. Warnings
 
 One Starlette deprecation warning was reported:
 
@@ -221,7 +315,7 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 8. Important test limitations
+## 10. Important test limitations
 
 - Automated REST provider responses are mocked.
 - Only the separately documented live REST request establishes actual REST API connectivity.
@@ -232,12 +326,12 @@ The installed dependency combination requires further compatibility investigatio
 - No scam-versus-legitimate classification test has been completed.
 - No false-positive or false-negative evaluation has been completed.
 - No family notification test has been completed.
-- No Gnani Timbre TTS test has been completed.
+- Gnani Timbre has been tested through one live endpoint playback using two warning segments; broader language and phrase evaluation remains pending.
 - No production load or concurrency test has been completed.
 
 ---
 
-## 9. Pending tests
+## 11. Pending tests
 
 ### Backend and audio validation
 
@@ -277,15 +371,15 @@ The installed dependency combination requires further compatibility investigatio
 
 ### Future functionality
 
-- Verify Gnani Timbre speech generation.
-- Test warning delivery and cooldown behaviour.
+- Evaluate additional Gnani Timbre warning phrases, voices and Devanagari/Hinglish output.
+- Integrate and test warning delivery, prioritisation and cooldown behaviour.
 - Test trusted-family notification consent.
 - Test incident summary generation.
 - Test end-to-end frontend and backend integration.
 
 ---
 
-## 10. Overall test assessment
+## 12. Overall test assessment
 
 | Component | Current assessment |
 |---|---|
@@ -294,13 +388,15 @@ The installed dependency combination requires further compatibility investigatio
 | REST automated tests | 9 PASS |
 | WebSocket endpoint | Implemented and live integration verified |
 | WebSocket mocked tests | 10 PASS |
-| Complete backend automated tests | 19 PASS, 1 warning |
+| TTS service and endpoint tests | 8 PASS |
+| Complete backend automated tests | 27 PASS, 1 warning |
 | Live WebSocket integration | One Hindi recording successfully transcribed |
 | Scam detection | Not implemented |
 | Risk scoring | Not implemented |
-| Gnani Timbre TTS | Not implemented |
+| Gnani Timbre standalone TTS service | Implemented and mock-tested |
+| `POST /synthesize-warning` | Live endpoint verified; playback confirmed for two segments |
 | Trusted-family notifications | Not implemented |
 | Frontend | Not implemented |
 | Kavach-Bench | Not implemented |
 
-**Conclusion:** The backend has 19 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. The WebSocket automated tests use a mocked provider. These results establish basic integration and tested backend behaviour, not transcription accuracy, scam-detection accuracy, or production readiness.
+**Conclusion:** The backend has 27 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. Gnani Timbre TTS has eight passing mocked automated tests and a separately verified live endpoint playback using two warning segments. The TTS endpoint remains standalone and is not yet integrated with scam detection or WebSocket transcription. These results establish basic integration and tested backend behaviour, not transcription accuracy, scam-detection accuracy, broad TTS quality, or production readiness.

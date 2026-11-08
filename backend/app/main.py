@@ -2,9 +2,11 @@ from pathlib import Path
 
 import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-
+from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from app.config import Settings, get_settings
 from app.streaming import router as streaming_router
+from app.tts import TTSServiceError, synthesize_warning
 
 app = FastAPI(
     title="Kavach API",
@@ -164,3 +166,39 @@ async def transcribe_audio(
         "processing_time": result.get("processing_time"),
         "end_to_end_latency": result.get("end_to_end_latency"),
     }
+
+
+@app.post("/synthesize-warning", tags=["speech"])
+async def synthesize_safety_warning(
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Generate Kavach's fixed Hindi safety warning as a WAV file."""
+
+    # 1. Check server configuration before contacting Gnani.
+    if not settings.gnani_api_key.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Speech synthesis is not configured on the server.",
+        )
+
+    # 2. Run the synchronous Gnani SDK outside the async event loop.
+    try:
+        audio_bytes = await run_in_threadpool(
+            synthesize_warning,
+            settings.gnani_api_key,
+        )
+    except TTSServiceError:
+        raise HTTPException(
+            status_code=502,
+            detail="Gnani speech synthesis failed.",
+        ) from None
+
+    # 3. Return the generated WAV audio.
+    return Response(
+        content=audio_bytes,
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": 'inline; filename="kavach-warning.wav"',
+            "Cache-Control": "no-store",
+        },
+    )
