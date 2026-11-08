@@ -17,14 +17,15 @@
 
 Latest complete backend test run:
 
-**27 passed, 0 failed, 1 warning.**
+**35 passed, 0 failed, 1 warning.**
 
 | Test group | Tests | Result |
 |---|---:|---|
 | Health and REST transcription | 9 | PASS |
 | WebSocket streaming and lifecycle | 10 | PASS |
 | TTS service and endpoint | 8 | PASS |
-| **Total** | **27** | **PASS** |
+| Detection data schemas | 8 | PASS |
+| **Total** | **35** | **PASS** |
 
 Command:
 
@@ -55,11 +56,13 @@ python -m pytest backend/tests -q
 git diff --check
 ```
 
-Actual result:
+Actual result at that historical verification point:
 
 ```
 27 passed, 1 warning in 2.90s
 ```
+
+The subsequent Milestone 4.1 verification added eight detection-schema tests. The latest complete backend run reported 35 passed, 0 failed and one non-failing warning.
 
 `git diff --check` completed without reporting whitespace errors.
 
@@ -299,7 +302,36 @@ This is the duration of the combined WAV file, including the inserted silence.
 
 ---
 
-## 9. Warnings
+## 9. Detection data-schema automated tests
+
+The detection schema tests validate the Pydantic data contract in `backend/app/detection/schemas.py`. They do not test scam detection accuracy or rule matching.
+
+| ID | Test coverage | Expected result |
+|---|---|---|
+| 1 | Streaming transcript metadata | Valid segment accepted |
+| 2 | REST transcript without streaming metadata | Valid segment accepted |
+| 3 | Empty or whitespace-only transcript | Rejected |
+| 4 | Negative segment index | Rejected |
+| 5 | Detection evidence fields | Explanation and evidence preserved |
+| 6 | Empty stage evidence | Accepted |
+| 7 | JSON serialization and disclaimer | Valid serialization |
+| 8 | Unexpected additional fields | Rejected |
+
+Actual result:
+
+```
+
+8 passed in 0.33s
+
+```
+
+The full backend suite subsequently reported 35 passed, 0 failed and one non-failing warning.
+
+These tests verify schema validation and serialization only. They do not establish that any scam stage can be detected correctly.
+
+---
+
+## 10. Warnings
 
 One Starlette deprecation warning was reported:
 
@@ -315,7 +347,7 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 10. Important test limitations
+## 11. Important test limitations
 
 - Automated REST provider responses are mocked.
 - Only the separately documented live REST request establishes actual REST API connectivity.
@@ -331,7 +363,7 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 11. Pending tests
+## 12. Pending tests
 
 ### Backend and audio validation
 
@@ -379,7 +411,7 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 12. Overall test assessment
+## 13. Overall test assessment
 
 | Component | Current assessment |
 |---|---|
@@ -389,9 +421,11 @@ The installed dependency combination requires further compatibility investigatio
 | WebSocket endpoint | Implemented and live integration verified |
 | WebSocket mocked tests | 10 PASS |
 | TTS service and endpoint tests | 8 PASS |
-| Complete backend automated tests | 27 PASS, 1 warning |
+| Detection data-schema tests | 8 PASS |
+| Complete backend automated tests | 35 PASS, 1 warning |
 | Live WebSocket integration | One Hindi recording successfully transcribed |
-| Scam detection | Not implemented |
+| Detection data schemas | Implemented; 8 automated tests PASS |
+| Scam detection rules and engine | Not implemented |
 | Risk scoring | Not implemented |
 | Gnani Timbre standalone TTS service | Implemented and mock-tested |
 | `POST /synthesize-warning` | Live endpoint verified; playback confirmed for two segments |
@@ -399,4 +433,4 @@ The installed dependency combination requires further compatibility investigatio
 | Frontend | Not implemented |
 | Kavach-Bench | Not implemented |
 
-**Conclusion:** The backend has 27 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. Gnani Timbre TTS has eight passing mocked automated tests and a separately verified live endpoint playback using two warning segments. The TTS endpoint remains standalone and is not yet integrated with scam detection or WebSocket transcription. These results establish basic integration and tested backend behaviour, not transcription accuracy, scam-detection accuracy, broad TTS quality, or production readiness.
+**Conclusion:** The backend has 35 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. Gnani Timbre TTS has eight passing mocked automated tests and a separately verified live endpoint playback using two warning segments. The detection data schemas have eight passing tests, but rule-based and contextual detection remain unimplemented. The TTS endpoint remains standalone and is not yet integrated with scam detection or WebSocket transcription. These results establish basic integration and tested backend behaviour, not transcription accuracy, scam-detection accuracy, broad TTS quality, or production readiness.

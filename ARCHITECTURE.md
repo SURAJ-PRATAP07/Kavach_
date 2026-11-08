@@ -221,9 +221,31 @@ Verification scope is limited to these two romanized Hindi warning segments and 
 
 **Integration boundary:** TTS is implemented as a standalone service and endpoint. Automatic warning triggering from the WebSocket or scam-detection workflow remains planned.
 
+### 4.6 Scam-detection data schemas
+
+`backend/app/detection/schemas.py`
+
+The detection package currently defines validated data contracts for the future detection engine.
+
+| Model | Responsibility |
+|---|---|
+| `ScamStage` | Enumerates impersonation, threats, isolation and financial extraction |
+| `TranscriptSource` | Identifies REST or streaming transcript origin |
+| `SignalStrength` | Represents qualitative low, medium or high signal strength |
+| `TranscriptSegment` | Normalizes transcript text and available provider metadata |
+| `DetectionEvidence` | Stores stage, rule ID, matched text, original transcript, reason and source metadata |
+| `StageAssessment` | Groups evidence for one scam stage |
+| `DetectionResult` | Represents the complete assessment and its non-verdict disclaimer |
+
+The schemas allow optional metadata because the current providers do not guarantee a common timestamp format or all segment fields across REST and streaming.
+
+Eight automated tests validate schema construction, field constraints, serialization and rejection of unexpected fields.
+
+**Implementation boundary:** The schemas are implemented, but the rule engine, contextual reasoning, numerical risk score and automatic warning workflow remain planned.
+
 ## 5. Planned Scam Detection Architecture
 
-The detection engine will combine two approaches.
+The data schemas described in Section 4.6 are implemented. The detection engine itself is not yet implemented and is planned to combine two approaches.
 
 ### 5.1 Rule-Based Detection
 
@@ -331,11 +353,15 @@ Kavach/
 |   |   +-- config.py
 |   |   +-- streaming.py
 |   |   +-- tts.py
+|   |   +-- detection/
+|   |       +-- __init__.py
+|   |       +-- schemas.py
 |   |
 |   +-- tests/
 |   |   +-- test_transcribe.py
 |   |   +-- test_streaming.py
 |   |   +-- test_tts.py
+|   |   +-- test_detection_schemas.py
 |   |
 |   +-- .env.example
 |   +-- requirements.txt

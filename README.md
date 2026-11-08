@@ -8,23 +8,25 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestone 1 — Backend setup and Gnani Prisma REST transcription integration.**
+**Milestones 0–4.1: Backend scaffold, Gnani speech integrations and detection data schemas.**
 
-Currently implemented:
+Currently implemented and verified:
 
-- FastAPI backend.
-- Health-check endpoint.
+- FastAPI backend and health-check endpoint.
 - Gnani Prisma v2.5 REST transcription integration.
+- Gnani Prisma WebSocket streaming integration, live-verified with one Hindi recording.
 - Hindi transcription configuration (`hi-IN`).
-- Audio upload validation.
-- Application-level 10 MB upload limit.
-- Upstream error and timeout handling.
-- Real-time WebSocket streaming through the Gnani streaming SDK.
-- Automated backend tests: 19 passing, with one non-failing deprecation warning.
+- Audio upload validation and application-level 10 MB upload limit.
+- Provider error and timeout handling.
+- Standalone Gnani Timbre v3.0 safety-warning TTS endpoint (`POST /synthesize-warning`), live-verified with two romanized Hindi warning segments.
+- Detection data schemas for transcript segments, scam stages, evidence and stage assessments.
+- Automated backend tests: **35 passing, 0 failing, 1 non-failing deprecation warning**.
 
-A real Hindi audio recording has been transcribed through the local Kavach REST endpoint. A separate live Hindi recording has also been streamed through the local WebSocket endpoint to Gnani Prisma, with a transcript event successfully received. The live streaming test verifies connectivity and event delivery, not general transcription accuracy; recognition errors were observed in the sample.
+The live transcription tests verify integration and event delivery, not general recognition accuracy. The live TTS test verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-Scam detection, risk scoring, voice warnings and the dashboard are not yet implemented.
+**Not yet implemented:** scam-stage rule matching, contextual detection, numerical risk scoring, automatic warning triggering, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+
+The TTS endpoint is currently standalone and is not triggered automatically by transcription or detection.
 
 ## Planned capabilities
 
@@ -95,10 +97,18 @@ Kavach/
 |   |-- app/
 |   |   |-- main.py
 |   |   |-- config.py
+|   |   |-- streaming.py
+|   |   |-- tts.py
+|   |   |-- detection/
+|   |       |-- __init__.py
+|   |       |-- schemas.py
 |   |
 |   |-- tests/
 |   |   |-- test_health.py
 |   |   |-- test_transcribe.py
+|   |   |-- test_streaming.py
+|   |   |-- test_tts.py
+|   |   |-- test_detection_schemas.py
 |   |
 |   |-- .env.example
 |   |-- requirements.txt
@@ -218,6 +228,18 @@ Accepts an audio file and forwards it to the configured Gnani Prisma transcripti
 
 The endpoint returns the transcription and available provider metadata.
 
+### `POST /synthesize-warning`
+
+Synthesizes the currently configured standalone Hindi safety warning using Gnani Timbre. The response is WAV audio (`audio/wav`). This endpoint is not yet automatically triggered by scam detection.
+
+### `WS /ws/transcribe`
+
+Streams audio to Gnani Prisma and forwards streaming events. The current implementation has been live-verified with one Hindi recording. See `TEST_REPORT.md` for verification scope and limitations.
+
+### Detection data schemas
+
+The backend includes validated Pydantic models in `backend/app/detection/schemas.py`. These define transcript segments, scam stages and explainable evidence structures. They do not yet perform scam classification.
+
 ## Testing and evaluation
 
 The project maintains:
@@ -228,7 +250,7 @@ The project maintains:
 - `ARCHITECTURE.md` — System architecture and design decisions.
 - `IMPLEMENTATION_LOG.md` — Development history.
 
-The 19 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 35 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -249,9 +271,11 @@ The 19 passing automated backend tests do not establish real-world scam detectio
 - [x] Initial automated backend tests.
 - [ ] Backend security and validation hardening.
 - [x] Real-time Prisma WebSocket integration (one live Hindi sample verified).
-- [ ] Explainable scam-stage detection.
+- [x] Detection data schemas and evidence structures.
+- [ ] Rule-based and contextual scam-stage detection.
 - [ ] Risk scoring and warning policy.
-- [ ] Gnani Timbre speech generation.
+- [x] Standalone Gnani Timbre TTS endpoint (live-verified).
+- [ ] Automatic warning policy and TTS integration.
 - [ ] Frontend and consent workflow.
 - [ ] Trusted-family notifications.
 - [ ] Incident summary generation.

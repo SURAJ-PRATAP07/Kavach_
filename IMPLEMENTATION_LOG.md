@@ -310,3 +310,78 @@ The transcript had been processed before the backend registered the Stop command
 - A single live recording does not establish production reliability or latency performance.
 - WebSocket security, origin restrictions, authentication, connection limits and session-duration limits still require review.
 - The Starlette/httpx deprecation warning remains under investigation.
+
+
+---
+
+## Milestone 3 - Gnani Timbre standalone safety-warning TTS
+
+**Status: Implemented, automated-test verified and live endpoint playback verified on 2026-11-09.**
+
+### Implementation
+
+- Added `backend/app/tts.py` with a standalone Gnani Timbre synthesis service.
+- Added `POST /synthesize-warning` to the FastAPI application.
+- Used `gnani-vachana==0.9.0`, model `timbre-v3.0`, voice `Tarika`, language `hi-IN` and speed `0.85`.
+- Synthesized two warning segments:
+  1. `Apna one-time password.`
+  2. `Kisi ke saath share na karein.`
+- Inserted 350 ms of silence between the two segments.
+- Validated the provider's WAV response and reconstructed a standard mono, 16 kHz, 16-bit PCM WAV.
+- Executed the synchronous SDK request in a thread pool to avoid blocking the asynchronous FastAPI event loop.
+- Added handling for missing credentials, malformed provider audio and synthesis failures.
+
+### Automated verification
+
+- TTS service tests: 5 passed.
+- TTS endpoint tests: 3 passed.
+- Total TTS tests: 8 passed.
+- Tests use a mocked provider client and do not consume live API credits.
+
+### Live endpoint verification
+
+- Endpoint returned HTTP 200 with `audio/wav`.
+- WAV contained 64,330 frames at 16,000 Hz.
+- Duration: 64,330 / 16,000 = 4.020625 seconds.
+- The user confirmed the playback was complete and understandable.
+
+### Limitations
+
+- Verification covers only the two tested romanized Hindi segments and the configured voice/settings.
+- Devanagari quality, broader Hindi/Hinglish quality and other warning phrases have not been evaluated.
+- TTS remains a standalone endpoint. It is not connected to streaming transcription, scam detection or an automatic warning policy.
+
+---
+
+## Milestone 4.1 - Scam-detection data schemas
+
+**Status: Implemented and automated-test verified on 2026-11-09.**
+
+### Implementation
+
+Added:
+- `backend/app/detection/__init__.py`
+- `backend/app/detection/schemas.py`
+- `backend/tests/test_detection_schemas.py`
+
+The Pydantic data models define:
+- Scam stages: impersonation, threats, isolation and financial extraction.
+- Transcript sources: REST and streaming.
+- Qualitative signal strengths: low, medium and high.
+- Normalized transcript segments with optional provider metadata.
+- Explainable detection evidence with rule ID, matched text, original transcript and reason.
+- Per-stage evidence assessments.
+- A complete detection result with a non-verdict disclaimer.
+
+Validation covers empty text, whitespace stripping, non-negative segment indices, optional metadata, enum values, JSON serialization and rejection of unexpected fields.
+
+### Automated verification
+
+- Detection-schema tests: 8 passed.
+- Full backend suite: 35 passed, 0 failed, 1 non-failing warning.
+- Python application compilation: passed.
+- `git diff --check`: passed.
+
+### Scope and limitations
+
+This milestone implements data contracts only. Rule matching, contextual detection, numerical risk scoring, timestamps derived from audio, warning prioritisation and automatic warning integration remain unimplemented.

@@ -85,14 +85,39 @@ The playback verification covers the two warning segments and the tested voice/s
 
 **Important integration boundary:** The TTS endpoint currently operates independently. It is not yet connected to the WebSocket transcription workflow, scam-stage detection or automated warning policy.
 
+**Milestone 4.1 - Scam-detection data schemas: Implemented and automated-test verified**
+
+Added `backend/app/detection/schemas.py` and the detection package.
+
+The validated data contract contains:
+
+- `ScamStage`: impersonation, threats, isolation and financial extraction.
+- `TranscriptSource`: REST and streaming.
+- `SignalStrength`: low, medium and high.
+- `TranscriptSegment`: normalized transcript text and available source metadata.
+- `DetectionEvidence`: rule ID, matched text, original transcript, explanation, stage and signal strength.
+- `StageAssessment`: evidence associated with one scam stage.
+- `DetectionResult`: stage assessments, segment count and a non-verdict disclaimer.
+
+Validation rejects empty transcript/evidence text, negative segment indices and unexpected fields. Optional provider metadata remains optional because timestamp formats and some streaming fields are not guaranteed.
+
+Automated verification:
+- Detection-schema tests: 8 passed.
+- Full backend suite: 35 passed, 0 failed, 1 non-failing warning.
+- Python application compilation: passed.
+- `git diff --check`: passed.
+
+**Important boundary:** These are data models only. No detection rules, contextual reasoning, numerical risk score or automatic warning policy has been implemented.
+
 ## Current Test Status
 
 Latest fresh backend verification on 2026-11-09:
 
-- Complete backend automated tests: **27 passed, 0 failed, 1 warning**.
+- Complete backend automated tests: **35 passed, 0 failed, 1 warning**.
 - REST and health tests: 9.
 - WebSocket tests: 10.
 - TTS tests: 8.
+- Detection-schema tests: 8.
 - Python application compilation: passed.
 - `git diff --check`: passed.
 - Live REST integration: verified.
@@ -113,10 +138,11 @@ The remaining Starlette/httpx deprecation warning is non-failing and requires co
 | WebSocket failure and cleanup handling | Implemented and mock-tested |
 | Gnani Timbre standalone TTS service | Implemented and mock-tested |
 | `POST /synthesize-warning` | Implemented and live-verified |
+| Scam-detection data schemas | Implemented and tested (8 tests) |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 27 passing, 1 warning |
+| Automated backend tests | 35 passing, 1 non-failing warning |
 
 ## Pending Components
 
@@ -124,7 +150,7 @@ The remaining Starlette/httpx deprecation warning is non-failing and requires co
 2. Test clean, noisy and telephony-compressed audio.
 3. Complete backend security and API contract review.
 4. Integrate TTS warnings with the scam-detection and WebSocket workflow.
-5. Implement scam-stage detection for impersonation, threats, isolation and financial extraction.
+5. Implement rule-based scam-stage detection for impersonation, threats, isolation and financial extraction. The data schemas are implemented; the detection rules are not.
 6. Implement hybrid rule-based and contextual detection.
 7. Implement explainable risk scoring with transcript evidence and timestamps.
 8. Design and implement warning prioritisation and triggering policy.
@@ -147,7 +173,7 @@ The remaining Starlette/httpx deprecation warning is non-failing and requires co
 
 ## Immediate Next Steps
 
-1. Update and verify all project documentation for Milestone 3.
+1. Complete documentation and GitHub verification for Milestones 3 and 4.1.
 2. Review backend security, validation and resource limits.
 3. Design and implement the scam-stage detection engine.
 4. Implement explainable risk scoring and warning policy.
