@@ -57,7 +57,7 @@ git diff --check
 Actual result:
 
 ```
-19 passed, 1 warning in 5.64s
+19 passed, 1 warning in 3.23s
 ```
 
 `git diff --check` completed without reporting whitespace errors.
