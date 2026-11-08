@@ -254,3 +254,59 @@ Latest complete backend test run:
 The Starlette/httpx deprecation warning remains non-failing.
 
 Live Gnani WebSocket authentication, transcription and streaming latency remain unverified.
+
+
+---
+
+## Milestone 2.3 - Live Gnani Prisma WebSocket verification
+
+**Status: Live integration verified with one Hindi recording on 2026-11-08.**
+
+A real WAV recording was streamed through Kavach's FastAPI `/ws/transcribe` endpoint to the actual Gnani Prisma streaming service. This was not a mocked provider test.
+
+### Observed configuration
+
+- Provider model: `prisma-v2.5`.
+- Language: `hi-IN`.
+- Encoding: signed 16-bit little-endian PCM.
+- Sample rate: 16 kHz.
+- Channels: mono.
+- Frame size: 1,024 bytes (512 samples).
+- Frame duration: 32 ms.
+
+### Actual provider event flow
+
+- Received the Kavach `ready` event with the configured model and audio format.
+- Received provider `processing`.
+- Received a real Hindi `transcript` event.
+- Received the final Kavach `stopped` event.
+- Confirmed the transcript event used the `segment_id` field.
+- A fresh source search found no `segment_idd` typo in the Python files.
+
+### Observed transcript and latency
+
+The provider returned a Hindi transcript for the test recording. The transcript contained recognition errors, so this run verifies connectivity and event delivery, not recognition accuracy.
+
+The latest provider-reported segment latency was 194 ms. A previous run reported 207 ms. These are individual provider observations, not a statistically meaningful benchmark or end-to-end application latency measurement.
+
+### Stop-event interpretation
+
+The `stopped` response reported `transcript_received_after_stop_command: false`.
+
+The transcript had been processed before the backend registered the Stop command. The flag therefore describes event timing; it does not mean the transcript was lost. It also does not establish that the provider exposes a definitive finalisation acknowledgement.
+
+### Test and repository verification
+
+- Complete backend automated tests: 19 passed, 0 failed, 1 warning.
+- REST and health tests: 9.
+- WebSocket tests: 10, using a mocked provider client.
+- Live WebSocket integration: one Hindi recording successfully transcribed.
+- Latest repository check before documentation changes: clean and synced with `origin/main` at `602efb5`.
+
+### Remaining limitations
+
+- Hindi/Hinglish accuracy has not been benchmarked.
+- No systematic noisy or compressed audio evaluation has been completed.
+- A single live recording does not establish production reliability or latency performance.
+- WebSocket security, origin restrictions, authentication, connection limits and session-duration limits still require review.
+- The Starlette/httpx deprecation warning remains under investigation.

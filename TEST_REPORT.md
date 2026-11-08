@@ -62,7 +62,7 @@ Actual result:
 
 `git diff --check` completed without reporting whitespace errors.
 
-The additional browser-disconnect test verifies mocked provider cleanup. Live Gnani WebSocket integration remains unverified.
+The additional browser-disconnect test verifies provider cleanup using a mocked client. Separately, live Gnani Prisma WebSocket integration was verified with one Hindi recording on 2026-11-08. See Section 6 for the observed results and limitations.
 
 ---
 
@@ -167,11 +167,45 @@ For 32 silence frames:
 
 These calculations describe the silence sent by Kavach. They do not establish the provider's actual transcript-finalisation time.
 
-**WebSocket verification status:** Automated mocked tests PASS. Live Gnani WebSocket integration remains NOT TESTED.
+**WebSocket verification status:** Automated mocked tests PASS. Live Gnani WebSocket integration was also verified on 2026-11-08 using one real Hindi audio recording.
 
 ---
 
-## 6. Warnings
+
+## 6. Live Gnani Prisma WebSocket integration verification
+
+**Date:** 2026-11-08
+
+A real WAV recording was streamed through the local Kavach FastAPI `/ws/transcribe` endpoint to the actual Gnani Prisma streaming service.
+
+| Check | Actual observation |
+|---|---|
+| Endpoint | `/ws/transcribe` |
+| Provider model | `prisma-v2.5` |
+| Language | `hi-IN` |
+| Encoding | `pcm_s16le` |
+| Sample rate | 16,000 Hz |
+| Channels | 1 (mono) |
+| Frame size | 1,024 bytes |
+| Frame duration | 32 ms |
+| Ready event | Received |
+| Processing event | Received |
+| Transcript event | Received with Hindi text |
+| Transcript segment ID | `segment_id` |
+| Stopped event | Received |
+| Result | PASS for this live integration sample |
+
+The latest provider-reported segment latency was 194 ms. A previous run reported 207 ms. These are individual observations, not an end-to-end latency benchmark or a statistically meaningful performance evaluation.
+
+The returned Hindi transcript contained recognition errors. Hindi/Hinglish accuracy must be evaluated separately using multiple labelled recordings.
+
+The `transcript_received_after_stop_command` field was `false` in the observed run. The transcript event had been processed before the backend registered the Stop command. This flag describes event timing and does not indicate transcript loss or confirm provider finalisation.
+
+**Scope:** This test verifies actual provider connectivity and transcript event delivery for one recording. It does not establish general recognition accuracy, noisy-audio robustness, production reliability or performance under concurrency.
+
+---
+
+## 7. Warnings
 
 One Starlette deprecation warning was reported:
 
@@ -187,12 +221,12 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 7. Important test limitations
+## 8. Important test limitations
 
 - Automated REST provider responses are mocked.
 - Only the separately documented live REST request establishes actual REST API connectivity.
 - WebSocket tests use a mocked Gnani SDK client.
-- No live WebSocket transcription test has been completed.
+- Live WebSocket transcription has been verified with one Hindi recording; broader language and audio-condition evaluation remains pending.
 - No systematic Hindi or Hinglish recognition accuracy benchmark has been performed.
 - No noisy or compressed audio benchmark has been completed.
 - No scam-versus-legitimate classification test has been completed.
@@ -203,7 +237,7 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 8. Pending tests
+## 9. Pending tests
 
 ### Backend and audio validation
 
@@ -216,8 +250,8 @@ The installed dependency combination requires further compatibility investigatio
 
 ### WebSocket streaming
 
-- Verify live Gnani Prisma WebSocket authentication and connection.
-- Verify live partial and final transcript events.
+- Expand live Gnani Prisma WebSocket testing across multiple recordings and sessions.
+- Evaluate transcript quality and event behaviour for Hindi and Hinglish.
 - Test provider connection failures.
 - Test provider error events and unexpected connection closure.
 - Test invalid audio-frame handling.
@@ -251,17 +285,17 @@ The installed dependency combination requires further compatibility investigatio
 
 ---
 
-## 9. Overall test assessment
+## 10. Overall test assessment
 
 | Component | Current assessment |
 |---|---|
 | FastAPI health endpoint | Automated tests PASS |
 | Gnani Prisma REST integration | Live integration PASS |
 | REST automated tests | 9 PASS |
-| WebSocket endpoint | Implemented |
+| WebSocket endpoint | Implemented and live integration verified |
 | WebSocket mocked tests | 10 PASS |
 | Complete backend automated tests | 19 PASS, 1 warning |
-| Live WebSocket integration | NOT TESTED |
+| Live WebSocket integration | One Hindi recording successfully transcribed |
 | Scam detection | Not implemented |
 | Risk scoring | Not implemented |
 | Gnani Timbre TTS | Not implemented |
@@ -269,4 +303,4 @@ The installed dependency combination requires further compatibility investigatio
 | Frontend | Not implemented |
 | Kavach-Bench | Not implemented |
 
-**Conclusion:** The current backend has 19 passing automated tests and one separately verified live Gnani Prisma REST integration. WebSocket streaming and its tested failure-handling paths have passed mocked automated tests. Live WebSocket integration remains pending. No scam-detection accuracy or production-readiness claims can yet be made.
+**Conclusion:** The backend has 19 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. The WebSocket automated tests use a mocked provider. These results establish basic integration and tested backend behaviour, not transcription accuracy, scam-detection accuracy, or production readiness.

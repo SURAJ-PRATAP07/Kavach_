@@ -19,11 +19,12 @@ Currently implemented:
 - Audio upload validation.
 - Application-level 10 MB upload limit.
 - Upstream error and timeout handling.
-- Automated backend tests.
+- Real-time WebSocket streaming through the Gnani streaming SDK.
+- Automated backend tests: 19 passing, with one non-failing deprecation warning.
 
-A real Hindi audio recording has been successfully transcribed through the local Kavach backend.
+A real Hindi audio recording has been transcribed through the local Kavach REST endpoint. A separate live Hindi recording has also been streamed through the local WebSocket endpoint to Gnani Prisma, with a transcript event successfully received. The live streaming test verifies connectivity and event delivery, not general transcription accuracy; recognition errors were observed in the sample.
 
-Features such as real-time streaming, scam detection, risk scoring, voice warnings and the dashboard are planned but not yet implemented.
+Scam detection, risk scoring, voice warnings and the dashboard are not yet implemented.
 
 ## Planned capabilities
 
@@ -227,7 +228,7 @@ The project maintains:
 - `ARCHITECTURE.md` — System architecture and design decisions.
 - `IMPLEMENTATION_LOG.md` — Development history.
 
-Do not interpret the current nine passing automated tests as proof of real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 19 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -247,7 +248,7 @@ Do not interpret the current nine passing automated tests as proof of real-world
 - [x] Hindi transcription through the local backend.
 - [x] Initial automated backend tests.
 - [ ] Backend security and validation hardening.
-- [ ] Real-time Prisma WebSocket integration.
+- [x] Real-time Prisma WebSocket integration (one live Hindi sample verified).
 - [ ] Explainable scam-stage detection.
 - [ ] Risk scoring and warning policy.
 - [ ] Gnani Timbre speech generation.

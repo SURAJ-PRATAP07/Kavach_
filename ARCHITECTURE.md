@@ -164,7 +164,7 @@ Verification status:
 - WebSocket implementation: completed.
 - Mocked WebSocket tests: 10 passed.
 - Complete backend automated tests: 19 passed, 1 warning.
-- Live streaming with the actual Gnani provider: pending.
+- Live streaming with the actual Gnani provider: verified with one Hindi recording on 2026-11-08.
 
 ## 5. Planned Scam Detection Architecture
 
@@ -275,12 +275,10 @@ This structure reflects the current known implementation. Additional modules wil
 
 ## 10. Immediate Engineering Priorities
 
-1. Verify live Gnani streaming authentication and connection.
-2. Test real transcript events using Hindi audio.
-3. Verify Stop behaviour and provider connection cleanup.
-4. Measure actual streaming latency.
-5. Review WebSocket security, authentication and resource limits.
-6. Verify Gnani Timbre access and integrate text-to-speech.
-7. Implement the scam detection engine.
-8. Add explainable risk scoring and safety responses.
-9. Build the frontend and complete end-to-end testing.
+1. Expand live streaming tests across Hindi and Hinglish recordings.
+2. Evaluate transcription accuracy under clean, noisy and compressed audio conditions.
+3. Review WebSocket security, authentication and resource limits.
+4. Verify Gnani Timbre access and integrate text-to-speech.
+5. Implement the scam detection engine.
+6. Add explainable risk scoring and safety responses.
+7. Build the frontend and complete end-to-end testing.
