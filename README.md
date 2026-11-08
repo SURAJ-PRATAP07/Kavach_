@@ -8,7 +8,7 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.1: Backend scaffold, Gnani speech integrations and detection data schemas.**
+**Milestones 0–4.2: Backend scaffold, Gnani speech integrations, detection schemas and initial phrase-based detection engine.**
 
 Currently implemented and verified:
 
@@ -20,13 +20,16 @@ Currently implemented and verified:
 - Provider error and timeout handling.
 - Standalone Gnani Timbre v3.0 safety-warning TTS endpoint (`POST /synthesize-warning`), live-verified with two romanized Hindi warning segments.
 - Detection data schemas for transcript segments, scam stages, evidence and stage assessments.
-- Automated backend tests: **35 passing, 0 failing, 1 non-failing deprecation warning**.
+- Initial standalone phrase-based detection for impersonation, threats, isolation and financial extraction.
+- Selected English, romanized Hindi/Hinglish and Devanagari phrase patterns.
+- Explainable detection evidence with rule IDs, matched phrases, reasons and available transcript metadata.
+- Automated backend tests: **62 passed, 0 failed, 1 non-failing deprecation warning**.
 
-The live transcription tests verify integration and event delivery, not general recognition accuracy. The live TTS test verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
+The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** scam-stage rule matching, contextual detection, numerical risk scoring, automatic warning triggering, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions, integration of detection with REST/WebSocket transcription, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
 
-The TTS endpoint is currently standalone and is not triggered automatically by transcription or detection.
+The detection engine is currently standalone. The TTS endpoint is also standalone and is not automatically triggered by detection.
 
 ## Planned capabilities
 
@@ -43,7 +46,7 @@ The TTS endpoint is currently standalone and is not triggered automatically by t
 
 ## Architecture overview
 
-```text
+`	ext
 Consented audio input
         |
         v
@@ -53,26 +56,28 @@ Consented audio input
  Gnani Prisma STT
         |
         v
- Timestamped transcript
+      Transcript
+        |
+        +------> Standalone phrase-based detection engine
+        |                  |
+        |                  v
+        |          Explainable stage evidence
         |
         v
- Scam-stage detection
+ Future contextual detection and risk scoring
         |
         v
- Explainable risk engine
-        |
-        v
- Warning and response policy
+ Future warning and response policy
         |
         +------> Gnani Timbre TTS
         |
         +------> Consented family notification
         |
         v
- Incident summary
-```
+ Future incident summary
+`
 
-The architecture is a development target. Not every component shown above is implemented yet.
+The phrase-based detection engine and the standalone TTS endpoint are implemented, but neither is yet integrated into an automatic transcription-to-warning workflow. Contextual reasoning, risk scoring, notifications and incident summaries remain planned.
 
 ## Technology stack
 
@@ -90,7 +95,7 @@ Additional technologies will be documented when implemented and verified.
 
 ## Repository structure
 
-```text
+`	ext
 Kavach/
 |
 |-- backend/
@@ -102,6 +107,8 @@ Kavach/
 |   |   |-- detection/
 |   |       |-- __init__.py
 |   |       |-- schemas.py
+|   |       |-- rules.py
+|   |       |-- engine.py
 |   |
 |   |-- tests/
 |   |   |-- test_health.py
@@ -109,6 +116,7 @@ Kavach/
 |   |   |-- test_streaming.py
 |   |   |-- test_tts.py
 |   |   |-- test_detection_schemas.py
+|   |   |-- test_detection_engine.py
 |   |
 |   |-- .env.example
 |   |-- requirements.txt
@@ -120,7 +128,7 @@ Kavach/
 |-- TROUBLESHOOTING.md
 |-- README.md
 |-- .gitignore
-```
+`
 
 ## Prerequisites
 
@@ -236,21 +244,34 @@ Synthesizes the currently configured standalone Hindi safety warning using Gnani
 
 Streams audio to Gnani Prisma and forwards streaming events. The current implementation has been live-verified with one Hindi recording. See `TEST_REPORT.md` for verification scope and limitations.
 
-### Detection data schemas
+### Detection schemas and initial rule-based engine
 
-The backend includes validated Pydantic models in `backend/app/detection/schemas.py`. These define transcript segments, scam stages and explainable evidence structures. They do not yet perform scam classification.
+The backend includes validated Pydantic models in ackend/app/detection/schemas.py. These define transcript segments, scam stages and explainable evidence structures.
+
+The standalone detection engine in ackend/app/detection/engine.py uses handcrafted phrase patterns from ackend/app/detection/rules.py to identify selected signals across four stages:
+
+- Impersonation.
+- Threats.
+- Isolation.
+- Financial extraction.
+
+The initial patterns cover selected English, romanized Hindi/Hinglish and Devanagari phrases. The engine preserves matched text, original transcript text, rule IDs, explanations and available segment metadata.
+
+The engine has **27 passing automated tests**. The complete backend suite has **62 passing tests**.
+
+This is an initial phrase-based signal detector, not a contextual scam classifier. It does not provide a calibrated numerical risk score and is not yet connected to REST transcription, WebSocket streaming or automatic warning delivery.
 
 ## Testing and evaluation
 
 The project maintains:
 
-- `TEST_REPORT.md` — Recorded test cases and actual results.
-- `TROUBLESHOOTING.md` — Known errors and fixes.
-- `PROJECT_STATE.md` — Current implementation status.
-- `ARCHITECTURE.md` — System architecture and design decisions.
-- `IMPLEMENTATION_LOG.md` — Development history.
+- TEST_REPORT.md — Recorded test cases and actual results.
+- TROUBLESHOOTING.md — Known errors and fixes.
+- PROJECT_STATE.md — Current implementation status.
+- ARCHITECTURE.md — System architecture and design decisions.
+- IMPLEMENTATION_LOG.md — Development history.
 
-The 35 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 62 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -272,7 +293,9 @@ The 35 passing automated backend tests do not establish real-world scam detectio
 - [ ] Backend security and validation hardening.
 - [x] Real-time Prisma WebSocket integration (one live Hindi sample verified).
 - [x] Detection data schemas and evidence structures.
-- [ ] Rule-based and contextual scam-stage detection.
+- [x] Initial standalone phrase-based scam-stage detection.
+- [ ] Contextual scam-stage detection and improved negation/context handling.
+- [ ] Evaluation against labelled legitimate and scam conversations.
 - [ ] Risk scoring and warning policy.
 - [x] Standalone Gnani Timbre TTS endpoint (live-verified).
 - [ ] Automatic warning policy and TTS integration.

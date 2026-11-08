@@ -385,3 +385,82 @@ Validation covers empty text, whitespace stripping, non-negative segment indices
 ### Scope and limitations
 
 This milestone implements data contracts only. Rule matching, contextual detection, numerical risk scoring, timestamps derived from audio, warning prioritisation and automatic warning integration remain unimplemented.
+
+---
+
+## Milestone 4.2 - Initial rule-based scam detection engine
+
+**Status: Implemented and automated-test verified on 2026-11-09.**
+
+### Implementation
+
+Added:
+- `backend/app/detection/rules.py`
+- `backend/app/detection/engine.py`
+- `backend/tests/test_detection_engine.py`
+
+Implemented an initial standalone phrase-based detection engine for four stages:
+
+1. Impersonation / authority claims.
+2. Threats / arrest threats.
+3. Isolation / secrecy instructions.
+4. Financial extraction / purported safe-account transfers.
+
+The initial handcrafted patterns cover selected English, romanized Hindi/Hinglish and Devanagari Hindi phrases.
+
+The engine:
+- Associates each match with a stable rule ID.
+- Preserves the matched phrase and original transcript.
+- Includes an explanation and qualitative signal strength.
+- Carries forward available source and segment metadata.
+- Produces an assessment for each of the four stages.
+- Suppresses duplicate evidence for the same rule within one segment.
+
+### Automated verification
+
+Detection-engine tests: **27 passed.**
+
+Coverage includes:
+- Positive phrase detection across the four stages.
+- Selected English, romanized Hindi and Devanagari examples.
+- Six generic legitimate-mention regression cases.
+- Three explicitly negated sentence regression cases.
+- Reported arrest-threat detection.
+- Empty input and all-stage output.
+- Multiple segments and source metadata.
+- Duplicate suppression.
+- Exact matched text and timestamp preservation.
+
+Latest complete backend test result:
+
+**62 passed, 0 failed, 1 non-failing warning.**
+
+Breakdown:
+- REST and health: 9.
+- WebSocket: 10.
+- TTS: 8.
+- Detection schemas: 8.
+- Detection engine: 27.
+
+Python compilation passed and `git diff --check` passed.
+
+### Scope and limitations
+
+This is an initial phrase-based signal detector, not a contextual scam classifier.
+
+The negative-sentence tests only verify that the tested sentences do not match the current affirmative patterns. They do not establish general negation understanding.
+
+The engine does not yet:
+- Understand full conversational context.
+- Reliably distinguish speakers or quoted speech.
+- Interpret all negation or legitimate exceptions.
+- Calculate a numerical or calibrated risk score.
+- Trigger automatic warnings.
+- Integrate with REST or WebSocket transcription.
+- Invoke Gnani Timbre automatically.
+
+No real-world detection accuracy or false-positive/false-negative rate has been established.
+
+### Repository status
+
+Implementation and tests are currently uncommitted. Documentation updates and final Git review are pending.

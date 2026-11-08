@@ -29,7 +29,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 
 ## 3. High-Level Architecture
 
-The current implementation provides transcription through two independent paths and a separate TTS endpoint.
+The current implementation provides two independent transcription paths, a standalone TTS endpoint, and a standalone phrase-based detection engine.
 
 ```mermaid
 flowchart TD
@@ -40,21 +40,20 @@ flowchart TD
 
     C --> E[Gnani Prisma]
     D --> E
-    E --> F[Transcript events]
+    E --> F[Transcript output]
 
-    F --> G[Scam detection engine - planned]
-    G --> H[Explainable risk scoring - planned]
-    H --> I[Warning policy - planned]
-    I --> J[Spoken warning workflow - planned]
+    F -. Not yet integrated .-> G[Standalone detection engine]
 
-    K[Client request] --> L[POST /synthesize-warning]
-    L --> M[Gnani Timbre v3.0]
-    M --> N[Standard WAV response]
+    G --> H[Four-stage phrase-based evidence]
+
+    I[Client request] --> J[POST /synthesize-warning]
+    J --> K[Gnani Timbre v3.0]
+    K --> L[Standard WAV response]
 ```
 
-The standalone TTS endpoint is implemented and live-tested. It is not yet triggered automatically by transcription, scam detection or risk scoring.
+The detection engine can currently be called independently with transcript segments. It is not yet connected to either transcription path. The standalone TTS endpoint is also independent of detection.
 
-Components marked as planned are not yet implemented.
+Components such as contextual reasoning, risk scoring and automatic warning orchestration remain planned.
 
 ## 4. Current Backend Architecture
 
@@ -241,40 +240,81 @@ The schemas allow optional metadata because the current providers do not guarant
 
 Eight automated tests validate schema construction, field constraints, serialization and rejection of unexpected fields.
 
-**Implementation boundary:** The schemas are implemented, but the rule engine, contextual reasoning, numerical risk score and automatic warning workflow remain planned.
+**Implementation boundary:** The schemas are implemented and are now used by the standalone phrase-based detection engine described in Section 4.7. Contextual reasoning, numerical risk scoring and automatic warning orchestration remain planned.
 
-## 5. Planned Scam Detection Architecture
+### 4.7 Initial rule-based scam detection engine
 
-The data schemas described in Section 4.6 are implemented. The detection engine itself is not yet implemented and is planned to combine two approaches.
+Files:
 
-### 5.1 Rule-Based Detection
+- `backend/app/detection/rules.py`
+- `backend/app/detection/engine.py`
 
-Fast detection of high-risk phrases and patterns, including:
-- Digital-arrest claims.
-- Fake police or agency impersonation.
-- Threats of immediate arrest.
-- Instructions to remain isolated.
-- Demands for money transfers.
+Tests:
 
-Rules will generate evidence signals, not automatically establish that a scam has occurred.
+- `backend/tests/test_detection_engine.py`
 
-### 5.2 Contextual Detection
+The initial detection engine analyses supplied `TranscriptSegment` objects and produces a `DetectionResult`.
+
+It currently supports four scam stages:
+
+| Stage | Detection focus |
+|---|---|
+| Impersonation | Claims of authority or official identity |
+| Threats | Threats involving arrest or legal consequences |
+| Isolation | Instructions to keep the conversation secret or avoid contacting others |
+| Financial extraction | Requests to transfer money to purported safe accounts |
+
+The initial handcrafted patterns cover selected English, romanized Hindi/Hinglish and Devanagari Hindi phrases.
+
+For each detected match, the engine records:
+- A stable rule ID.
+- The matched phrase.
+- The original transcript text.
+- A human-readable explanation.
+- Qualitative signal strength.
+- Available transcript source and segment metadata, including timestamps.
+
+Duplicate evidence for the same rule is suppressed within an individual segment. Each result includes an assessment for all four scam stages, including stages with no evidence.
+
+**Current implementation boundary:**
+
+This is a standalone phrase-based signal detector, not a contextual scam classifier. It does not yet reliably interpret general negation, quoted speech, speaker identity or full conversational context. Qualitative signal strength is not a calibrated probability or numerical risk score.
+
+The engine is not yet integrated with REST transcription, WebSocket streaming or automatic Timbre warnings.
+
+Automated verification: 27 detection-engine tests passed. See `TEST_REPORT.md`.
+
+## 5. Detection Architecture and Remaining Work
+
+### 5.1 Implemented: Phrase-based detection
+
+The initial standalone rule engine is implemented as described in Section 4.7.
+
+It detects selected phrases associated with impersonation, threats, isolation and financial extraction. It produces explainable evidence rather than independently declaring that a scam has occurred.
+
+Its current limitations include incomplete phrase coverage and limited handling of context, negation, quoted speech and speaker identity.
+
+### 5.2 Planned: Contextual detection
 
 A contextual reasoning component will analyse conversation meaning, progression and relationships between statements.
 
-It will help distinguish legitimate discussions from coordinated scam behaviour and reduce reliance on individual keywords.
+It should help distinguish legitimate discussions from coordinated scam behaviour and reduce reliance on individual phrases.
 
-### 5.3 Explainable Risk Scoring
+This component has not yet been implemented.
 
-The risk engine will combine detection signals into a score and risk category.
+### 5.3 Planned: Explainable risk scoring
 
-Every important risk assessment should include:
+A future risk engine will combine detection signals into a risk score and category.
+
+Every important assessment should include:
 - Detected behaviour.
 - Supporting transcript evidence.
-- Relevant timestamps.
-- Explanation of the risk contribution.
+- Relevant timestamps where available.
+- An explanation of each risk contribution.
 
-Scoring weights and thresholds must be validated through testing rather than chosen arbitrarily.
+Scoring weights and thresholds must be evaluated against labelled legitimate and scam conversations rather than selected arbitrarily.
+
+No numerical or calibrated risk score is currently implemented.
 
 ## 6. Planned Safety Response and Integration
 
@@ -313,6 +353,8 @@ Current test files:
 - `test_transcribe.py`
 - `test_streaming.py`
 - `test_tts.py`
+- `test_detection_schemas.py`
+- `test_detection_engine.py`
 
 Latest complete automated verification on 2026-11-09:
 
@@ -321,9 +363,11 @@ Latest complete automated verification on 2026-11-09:
 | Health and REST transcription | 9 |
 | WebSocket streaming and lifecycle | 10 |
 | TTS service and endpoint | 8 |
-| **Total** | **27** |
+| Detection data schemas | 8 |
+| Detection engine | 27 |
+| **Total** | **62** |
 
-Result: 27 passed, 0 failed, 1 non-failing Starlette deprecation warning.
+Result: **62 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
 Additional live integration checks:
 - REST transcription: one successful live Hindi request.
@@ -331,6 +375,8 @@ Additional live integration checks:
 - TTS: one live endpoint request with playback confirmed complete and understandable.
 
 Automated WebSocket and TTS tests use mocked provider clients. Live integration checks are separate from automated tests.
+
+The detection-engine tests verify the implemented phrase patterns and evidence behaviour. They do not establish real-world scam-detection accuracy.
 
 Additional planned testing:
 - Hindi and Hinglish recognition.
@@ -356,12 +402,15 @@ Kavach/
 |   |   +-- detection/
 |   |       +-- __init__.py
 |   |       +-- schemas.py
+|   |       +-- rules.py
+|   |       +-- engine.py
 |   |
 |   +-- tests/
 |   |   +-- test_transcribe.py
 |   |   +-- test_streaming.py
 |   |   +-- test_tts.py
 |   |   +-- test_detection_schemas.py
+|   |   +-- test_detection_engine.py
 |   |
 |   +-- .env.example
 |   +-- requirements.txt
@@ -382,10 +431,11 @@ This structure reflects the current known implementation. Additional modules wil
 1. Review backend security, validation and resource limits.
 2. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
 3. Test clean, noisy and telephony-compressed audio conditions.
-4. Design the scam-stage detection engine for impersonation, threats, isolation and financial extraction.
-5. Implement hybrid rule-based and contextual detection.
-6. Implement explainable risk scoring with transcript evidence and timestamps.
+4. Expand and evaluate phrase-based scam-stage rules against legitimate and scam examples.
+5. Design and implement contextual detection, including handling of negation, quoted speech and conversational context.
+6. Implement explainable risk scoring and validate thresholds against labelled data.
 7. Define a safe warning policy and integrate the existing standalone TTS service.
-8. Build the frontend and consent workflow.
-9. Implement trusted-family notifications and incident summaries.
-10. Develop Kavach-Bench and complete end-to-end testing.
+8. Integrate detection with REST and WebSocket transcript workflows.
+9. Build the frontend and consent workflow.
+10. Implement trusted-family notifications, incident summaries and Kavach-Bench.
+11. Complete end-to-end, privacy, security and performance testing.
