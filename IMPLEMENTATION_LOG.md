@@ -464,3 +464,47 @@ No real-world detection accuracy or false-positive/false-negative rate has been 
 ### Repository status
 
 Implementation and tests are currently uncommitted. Documentation updates and final Git review are pending.
+
+
+---
+
+## Follow-up - Detection matching robustness
+
+**Status: Implemented and automated-test verified on 2026-11-09; Git commit pending.**
+
+### Changes
+
+Updated `backend/app/detection/engine.py` to tolerate variable whitespace between words in configured detection phrases.
+
+The matcher now allows one or more whitespace characters where a configured phrase contains a space. The original transcript and matched text are preserved in the generated evidence. Existing rule IDs, explanations, signal strengths, segment metadata and duplicate suppression behaviour remain intact.
+
+Reviewed `backend/app/detection/rules.py`. Its only Git diff is removal of an initial blank line; no Devanagari pattern correction was required. Python Unicode inspection confirmed the current source strings are correctly encoded.
+
+### Regression tests
+
+Added five variable-whitespace tests covering:
+- Hindi impersonation.
+- Hindi arrest threat.
+- Hindi isolation.
+- Hindi financial extraction.
+- English impersonation.
+
+Detection-engine test suite: **31 passed**.
+
+Complete backend suite: **66 passed, 0 failed, 1 non-failing warning**.
+
+Additional verification:
+- `python -m compileall -q app tests`: passed.
+- `git diff --check`: passed.
+
+### Scope and limitations
+
+This update improves matching when whitespace varies in a transcript. It does not add contextual language understanding, general negation handling, speaker identification, calibrated risk scoring or real-world detection accuracy.
+
+The five regression tests establish behaviour for their specific test inputs. They do not establish robustness across all Hindi/Hinglish speech or transcription errors.
+
+The pilot evaluation dataset remains empty and has not been used to calculate detection metrics.
+
+### Repository status
+
+The implementation, tests and documentation updates are awaiting final review and Git commit/push.

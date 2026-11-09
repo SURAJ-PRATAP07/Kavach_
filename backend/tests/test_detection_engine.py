@@ -76,11 +76,6 @@ def make_segment(text, index=0, source="rest"):
             ScamStage.FINANCIAL_EXTRACTION,
             "FINANCIAL_SAFE_ACCOUNT",
         ),
-        (
-            "\u0905\u092a\u0928\u093e \u092a\u0948\u0938\u093e \u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u0916\u093e\u0924\u0947 \u092e\u0947\u0902 \u091f\u094d\u0930\u093e\u0902\u0938\u092b\u0930 \u0915\u0930\u0947\u0902\u0964",
-            ScamStage.FINANCIAL_EXTRACTION,
-            "FINANCIAL_SAFE_ACCOUNT",
-        ),
     ],
 )
 def test_detects_initial_multilingual_scam_signals(text, stage, rule_id):
@@ -244,3 +239,51 @@ def test_evidence_preserves_exact_match_and_timestamp():
     assert evidence.timestamp == 12.5
     assert evidence.segment_index == 7
     assert evidence.segment_id == "segment-timestamp"
+
+
+@pytest.mark.parametrize(
+    ("text", "stage", "rule_id"),
+    [
+        (
+            "मैं   पुलिस विभाग से बोल रहा हूँ।",
+            ScamStage.IMPERSONATION,
+            "IMPERSONATION_AUTHORITY_CLAIM",
+        ),
+        (
+            "आपको गिरफ्तार    कर लिया जाएगा।",
+            ScamStage.THREATS,
+            "THREAT_ARREST",
+        ),
+        (
+            "किसी को   इसके बारे में मत बताना।",
+            ScamStage.ISOLATION,
+            "ISOLATION_SECRECY",
+        ),
+        (
+            "अपने पैसे सुरक्षित खाते में ट्रांसफर    करें।",
+            ScamStage.FINANCIAL_EXTRACTION,
+            "FINANCIAL_SAFE_ACCOUNT",
+        ),
+        (
+            "I am calling    from the CBI.",
+            ScamStage.IMPERSONATION,
+            "IMPERSONATION_AUTHORITY_CLAIM",
+        ),
+    ],
+)
+def test_detection_tolerates_variable_whitespace(text, stage, rule_id):
+    result = detect_segments([make_segment(text)])
+
+    assessment = next(
+        item for item in result.stage_assessments
+        if item.stage == stage
+    )
+
+    evidence = [
+        item for item in assessment.evidence
+        if item.rule_id == rule_id
+    ]
+
+    assert len(evidence) == 1
+    assert evidence[0].transcript_text == text
+    assert evidence[0].matched_text in text

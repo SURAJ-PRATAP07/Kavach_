@@ -17,8 +17,9 @@ def _find_match(
     """Return the first matching phrase and its original text offset."""
 
     for pattern in rule.patterns:
+        flexible_pattern = pattern.replace(" ", r"\s+")
         match = re.search(
-            pattern,
+            flexible_pattern,
             text,
             flags=re.IGNORECASE,
         )

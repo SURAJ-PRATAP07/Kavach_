@@ -124,12 +124,12 @@ The engine is standalone and is not yet integrated with REST transcription, WebS
 
 Latest fresh backend verification on 2026-11-09:
 
-- Complete backend automated tests: **62 passed, 0 failed, 1 non-failing warning**.
+- Complete backend automated tests: **66 passed, 0 failed, 1 non-failing warning**.
 - REST and health tests: 9.
 - WebSocket tests: 10.
 - TTS tests: 8.
 - Detection-schema tests: 8.
-- Detection-engine tests: 27.
+- Detection-engine tests: 31.
 - Python compilation: passed.
 - `git diff --check`: passed.
 
@@ -137,11 +137,13 @@ Live integration checks:
 - REST transcription: verified.
 - WebSocket transcription: verified with one Hindi recording.
 - TTS endpoint: HTTP 200; playback of two warning segments confirmed complete and understandable.
-- Devanagari detection: four representative phrases, one per scam stage, successfully detected.
+- Detection-engine unit tests: selected Devanagari phrases across all four scam stages successfully matched. These are local rule-engine tests, not live Gnani integration tests.
 
 Mocked provider tests are distinct from live integration checks. These results do not establish broad transcription accuracy, TTS quality or real-world scam-detection accuracy.
 
 The existing Starlette/httpx deprecation warning is non-failing and remains under investigation.
+
+The latest detection-engine update adds whitespace-tolerant phrase matching. Five regression tests cover variable whitespace in Hindi and English phrases. Python Unicode inspection confirmed that the current Devanagari patterns are correctly encoded in the source file. This verifies source text, not real-world speech recognition or detection accuracy.
 
 ## Implemented Components
 
@@ -154,11 +156,11 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Gnani Timbre standalone TTS service | Implemented and mock-tested |
 | `POST /synthesize-warning` | Implemented and live-verified |
 | Scam-detection data schemas | Implemented and tested (8 tests) |
-| Initial standalone phrase-based scam detection engine | Implemented and tested (27 tests) |
+| Initial standalone phrase-based scam detection engine | Implemented and tested (31 tests) |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 62 passing, 1 non-failing warning |
+| Automated backend tests | 66 passing, 1 non-failing warning |
 
 ## Pending Components
 
