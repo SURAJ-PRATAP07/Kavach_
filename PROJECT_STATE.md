@@ -155,6 +155,7 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | `POST /synthesize-warning` | Implemented and live-verified |
 | Scam-detection data schemas | Implemented and tested (8 tests) |
 | Initial standalone phrase-based scam detection engine | Implemented and tested (27 tests) |
+| React + TypeScript frontend dashboard | Implemented in mock-first mode; production build and primary routes verified |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
@@ -174,7 +175,7 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 10. Implement consent-based trusted-family notifications.
 11. Implement incident summaries for cybercrime reporting.
 12. Develop Kavach-Bench.
-13. Build the responsive frontend dashboard.
+13. Complete end-to-end frontend/backend integration, consent workflow and frontend testing.
 14. Complete end-to-end, privacy, performance and deployment testing.
 
 ## Important Engineering Constraints
@@ -195,6 +196,6 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 3. Evaluate detection rules and implement contextual scam detection.
 4. Implement explainable risk scoring and warning policy.
 5. Integrate the verified TTS service with the detection workflow.
-6. Build the frontend and consent workflow.
+6. Complete frontend/backend integration and the consent workflow.
 7. Add family notifications, incident summaries and Kavach-Bench.
 8. Complete end-to-end testing, deployment and the hackathon demonstration.

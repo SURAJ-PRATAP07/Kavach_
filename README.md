@@ -8,7 +8,7 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2: Backend scaffold, Gnani speech integrations, detection schemas and initial phrase-based detection engine.**
+**Milestones 0–4.2: Backend scaffold, Gnani speech integrations, detection schemas and initial phrase-based detection engine. The mock-first React dashboard is now available in `frontend/`.**
 
 Currently implemented and verified:
 
@@ -24,10 +24,12 @@ Currently implemented and verified:
 - Selected English, romanized Hindi/Hinglish and Devanagari phrase patterns.
 - Explainable detection evidence with rule IDs, matched phrases, reasons and available transcript metadata.
 - Automated backend tests: **62 passed, 0 failed, 1 non-failing deprecation warning**.
+- React + TypeScript frontend dashboard in `frontend/`, with mock data enabled by default.
+- Frontend production build and browser checks across all primary routes.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions, integration of detection with REST/WebSocket transcription, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions, integration of detection with REST/WebSocket transcription, trusted-family notifications, incident summaries and Kavach-Bench. Frontend features that depend on unfinished backend endpoints remain in mock mode.
 
 The detection engine is currently standalone. The TTS endpoint is also standalone and is not automatically triggered by detection.
 
@@ -42,7 +44,7 @@ The detection engine is currently standalone. The TTS endpoint is also standalon
 7. Consent-based trusted-family notifications.
 8. Incident summaries for cybercrime reporting.
 9. Kavach-Bench for evaluating detection under different audio conditions.
-10. A responsive web dashboard.
+10. Complete backend integration for the responsive web dashboard.
 
 ## Architecture overview
 
@@ -87,7 +89,7 @@ The phrase-based detection engine and the standalone TTS endpoint are implemente
 | Configuration | Pydantic Settings |
 | HTTP client | HTTPX |
 | Speech transcription | Gnani Prisma v2.5 |
-| Frontend | React, TypeScript (planned) |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
 | Testing | Pytest |
 | Version control | Git, GitHub |
 
@@ -97,6 +99,12 @@ Additional technologies will be documented when implemented and verified.
 
 `	ext
 Kavach/
+|
+|-- frontend/
+|   |-- src/
+|   |-- package.json
+|   |-- package-lock.json
+|   |-- vite.config.ts
 |
 |-- backend/
 |   |-- app/
@@ -129,6 +137,18 @@ Kavach/
 |-- README.md
 |-- .gitignore
 `
+
+## Frontend setup
+
+The frontend defaults to mock data, so it can be run without the backend:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the local URL printed by Vite (normally `http://localhost:5173`). See [`frontend/README.md`](frontend/README.md) for available routes and backend integration details.
 
 ## Prerequisites
 

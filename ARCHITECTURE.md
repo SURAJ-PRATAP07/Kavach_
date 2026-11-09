@@ -24,7 +24,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 | Async execution | Starlette thread pool | Run synchronous TTS SDK calls without blocking the event loop |
 | Audio processing | Python standard library | PCM validation and WAV construction |
 | Testing | Pytest | Automated verification |
-| Frontend | Planned | Responsive safety dashboard |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS | Mock-first responsive safety dashboard in `frontend/` |
 | Database | Planned | Secure incident metadata storage |
 
 ## 3. High-Level Architecture
