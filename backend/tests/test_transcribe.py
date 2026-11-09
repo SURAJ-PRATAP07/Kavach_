@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
+from app.detection.schemas import ScamStage
 from app.main import app
 
 
@@ -235,3 +236,85 @@ def test_transcribe_handles_invalid_gnani_json(monkeypatch):
 
     assert response.status_code == 502
     assert "invalid response" in response.json()["detail"]
+
+
+def test_transcribe_returns_detection_result(monkeypatch):
+    monkeypatch.setattr(
+        "app.main.httpx.AsyncClient",
+        FakeAsyncClient,
+    )
+
+    response = client.post(
+        "/transcribe",
+        files={
+            "audio_file": (
+                "sample.wav",
+                b"test-audio-content",
+                "audio/wav",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "OTP" in body["transcript"]
+    assert body["model"] == "prisma-v2.5"
+    assert body["request_id"] == "test-request-123"
+    assert body["processing_time"] == 0.2
+    assert body["end_to_end_latency"] == 0.3
+    assert "detection" in body
+    assert body["detection"]["segments_analyzed"] == 1
+    assert len(body["detection"]["stage_assessments"]) == 4
+    assert body["detection"]["disclaimer"]
+    assert all(
+        not stage["evidence"]
+        for stage in body["detection"]["stage_assessments"]
+    )
+
+
+def test_transcribe_detects_scam_signal(monkeypatch):
+    class ScamResponse(FakeGnaniResponse):
+        def json(self):
+            return {
+                "success": True,
+                "request_id": "scam-test-123",
+                "transcript": "You will be arrested.",
+                "model": "prisma-v2.5",
+                "processing_time": 0.2,
+                "end_to_end_latency": 0.3,
+            }
+
+    class ScamClient(FakeAsyncClient):
+        async def post(self, url, headers, data, files):
+            return ScamResponse()
+
+    monkeypatch.setattr(
+        "app.main.httpx.AsyncClient",
+        ScamClient,
+    )
+
+    response = client.post(
+        "/transcribe",
+        files={
+            "audio_file": (
+                "sample.wav",
+                b"test-audio-content",
+                "audio/wav",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    detection = response.json()["detection"]
+    threats = next(
+        item
+        for item in detection["stage_assessments"]
+        if item["stage"] == ScamStage.THREATS.value
+    )
+    assert len(threats["evidence"]) == 1
+    evidence = threats["evidence"][0]
+    assert evidence["rule_id"] == "THREAT_ARREST"
+    assert evidence["matched_text"] == "You will be arrested"
+    assert evidence["source"] == "rest"
+    assert evidence["timestamp"] is None

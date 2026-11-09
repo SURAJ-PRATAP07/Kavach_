@@ -107,25 +107,29 @@ Automated verification:
 - Python application compilation: passed.
 - `git diff --check`: passed.
 
-**Current detection status:** Milestone 4.2 has implemented an initial standalone, phrase-based rule engine in `backend/app/detection/engine.py` and `backend/app/detection/rules.py`.
+**Current detection status:** Milestone 4.2 has implemented an initial phrase-based rule engine in `backend/app/detection/engine.py` and `backend/app/detection/rules.py`. Stage 1 REST integration is implemented and automated-test verified.
 
 The engine currently:
 - Detects initial signals for impersonation, threats, isolation and financial extraction.
 - Includes limited English, romanized Hindi/Hinglish and Devanagari phrase patterns.
 - Preserves matched text, original transcript, rule ID, explanation, signal strength and available segment metadata.
 - Suppresses duplicate evidence for the same rule within one transcript segment.
+- Tolerates variable whitespace between words in configured phrases.
 - Uses qualitative signal strengths; these are not calibrated probabilities or a numerical risk score.
 
-The engine is standalone and is not yet integrated with REST transcription, WebSocket streaming or automatic TTS warnings.
+**REST integration:** The `/transcribe` endpoint validates the provider transcript, normalises it into a `TranscriptSegment` with source `rest`, invokes `detect_segments`, and includes the structured detection result in its response. The integration is covered by automated tests using mocked provider responses.
+
+**Remaining integration work:** Detection is not yet integrated with WebSocket streaming. Automatic Timbre warning triggering is also pending.
 
 **Limitations:** Phrase matching is not general contextual understanding. Negation, reported speech, speaker identity and legitimate conversational context are not comprehensively interpreted. No real-world detection accuracy has been established.
 
 ## Current Test Status
 
-Latest fresh backend verification on 2026-11-09:
+Latest complete backend verification on 2026-11-10:
 
-- Complete backend automated tests: **66 passed, 0 failed, 1 non-failing warning**.
-- REST and health tests: 9.
+- Complete backend automated tests: **68 passed, 0 failed, 1 non-failing warning**.
+- Health endpoint tests: 1.
+- REST transcription tests: 10.
 - WebSocket tests: 10.
 - TTS tests: 8.
 - Detection-schema tests: 8.
@@ -133,17 +137,18 @@ Latest fresh backend verification on 2026-11-09:
 - Python compilation: passed.
 - `git diff --check`: passed.
 
+The test breakdown totals 68: 1 + 10 + 10 + 8 + 8 + 31.
+
 Live integration checks:
-- REST transcription: verified.
+- REST transcription: verified with a real Hindi audio recording.
 - WebSocket transcription: verified with one Hindi recording.
 - TTS endpoint: HTTP 200; playback of two warning segments confirmed complete and understandable.
+- REST detection integration: automated tests verify the response structure and a detected scam signal using mocked provider responses.
 - Detection-engine unit tests: selected Devanagari phrases across all four scam stages successfully matched. These are local rule-engine tests, not live Gnani integration tests.
 
 Mocked provider tests are distinct from live integration checks. These results do not establish broad transcription accuracy, TTS quality or real-world scam-detection accuracy.
 
 The existing Starlette/httpx deprecation warning is non-failing and remains under investigation.
-
-The latest detection-engine update adds whitespace-tolerant phrase matching. Five regression tests cover variable whitespace in Hindi and English phrases. Python Unicode inspection confirmed that the current Devanagari patterns are correctly encoded in the source file. This verifies source text, not real-world speech recognition or detection accuracy.
 
 ## Implemented Components
 
@@ -156,7 +161,7 @@ The latest detection-engine update adds whitespace-tolerant phrase matching. Fiv
 | Gnani Timbre standalone TTS service | Implemented and mock-tested |
 | `POST /synthesize-warning` | Implemented and live-verified |
 | Scam-detection data schemas | Implemented and tested (8 tests) |
-| Initial standalone phrase-based scam detection engine | Implemented and tested (31 tests) |
+| Phrase-based scam detection engine | Implemented, tested (31 tests), and integrated with REST transcription |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
@@ -167,12 +172,12 @@ The latest detection-engine update adds whitespace-tolerant phrase matching. Fiv
 1. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
 2. Test clean, noisy and telephony-compressed audio.
 3. Complete backend security and API contract review.
-4. Integrate TTS warnings with the scam-detection and WebSocket workflow.
-5. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
-6. Implement contextual reasoning and hybrid detection.
-7. Implement explainable and calibrated risk scoring.
-8. Design and implement warning prioritisation and triggering policy.
-9. Integrate detection with the REST/WebSocket transcription workflow and verified TTS service.
+4. Integrate detection with WebSocket streaming.
+5. Integrate TTS warnings with the detection and WebSocket workflow.
+6. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
+7. Implement contextual reasoning and hybrid detection.
+8. Implement explainable and calibrated risk scoring.
+9. Design and implement warning prioritisation and triggering policy.
 10. Implement consent-based trusted-family notifications.
 11. Implement incident summaries for cybercrime reporting.
 12. Develop Kavach-Bench.
@@ -192,7 +197,7 @@ The latest detection-engine update adds whitespace-tolerant phrase matching. Fiv
 
 ## Immediate Next Steps
 
-1. Complete documentation and GitHub verification for Milestones 3, 4.1 and 4.2.
+1. Complete documentation review and GitHub verification for the REST detection integration.
 2. Review backend security, validation and resource limits.
 3. Evaluate detection rules and implement contextual scam detection.
 4. Implement explainable risk scoring and warning policy.

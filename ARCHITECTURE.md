@@ -29,7 +29,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 
 ## 3. High-Level Architecture
 
-The current implementation provides two independent transcription paths, a standalone TTS endpoint, and a standalone phrase-based detection engine.
+The current implementation provides two transcription paths, a REST-integrated phrase-based detection engine, and a standalone Gnani Timbre TTS endpoint.
 
 ```mermaid
 flowchart TD
@@ -40,20 +40,28 @@ flowchart TD
 
     C --> E[Gnani Prisma]
     D --> E
+
     E --> F[Transcript output]
 
-    F -. Not yet integrated .-> G[Standalone detection engine]
+    F --> G[REST transcript normalisation]
+    G --> H[Phrase-based detection engine]
+    H --> I[Four-stage evidence and assessment]
+    I --> J[REST response with detection result]
 
-    G --> H[Four-stage phrase-based evidence]
+    D -. Detection integration pending .-> H
 
-    I[Client request] --> J[POST /synthesize-warning]
-    J --> K[Gnani Timbre v3.0]
-    K --> L[Standard WAV response]
+    K[Client request] --> L[POST /synthesize-warning]
+    L --> M[Gnani Timbre v3.0]
+    M --> N[Standard WAV response]
+
+    I -. Automatic warning integration pending .-> L
 ```
 
-The detection engine can currently be called independently with transcript segments. It is not yet connected to either transcription path. The standalone TTS endpoint is also independent of detection.
+The REST transcription path invokes the phrase-based detection engine after successful transcript validation and returns its structured assessment alongside the transcription response.
 
-Components such as contextual reasoning, risk scoring and automatic warning orchestration remain planned.
+The WebSocket transcription path currently forwards provider transcript events without invoking the detection engine. The standalone TTS endpoint is also independent of the detection workflow.
+
+Contextual reasoning, numerical risk scoring, automatic warning orchestration and trusted-family notifications remain planned.
 
 ## 4. Current Backend Architecture
 
@@ -98,13 +106,20 @@ Flow:
 3. The backend checks that the Gnani API key is configured.
 4. The backend sends the audio to Gnani Prisma using HTTPX.
 5. The backend validates the provider response.
-6. The transcript and available metadata are returned.
+6. The transcript is normalised into a `TranscriptSegment` with source `rest`.
+7. The phrase-based detection engine analyses the transcript.
+8. The endpoint returns the original transcription fields together with the structured detection result.
+
+The response preserves the transcript and available provider metadata, including model, request ID and timing information.
 
 Error handling covers missing configuration, invalid input, oversized files, provider HTTP errors, invalid responses and request timeouts.
 
 Verification:
+
 - One successful live Hindi transcription request through the Kavach backend.
 - Automated REST tests use mocked provider responses.
+- REST detection integration is covered by automated tests.
+- The latest REST test suite contains 10 passing tests.
 
 ### 4.4 WebSocket Streaming Transcription
 
@@ -280,9 +295,9 @@ Duplicate evidence for the same rule is suppressed within an individual segment.
 
 This is a standalone phrase-based signal detector, not a contextual scam classifier. It does not yet reliably interpret general negation, quoted speech, speaker identity or full conversational context. Qualitative signal strength is not a calibrated probability or numerical risk score.
 
-The engine is not yet integrated with REST transcription, WebSocket streaming or automatic Timbre warnings.
+The engine is integrated with the REST transcription endpoint. WebSocket streaming integration and automatic Timbre warning triggering remain pending.
 
-Automated verification: 27 detection-engine tests passed. See `TEST_REPORT.md`.
+Automated verification: 31 detection-engine tests passed. See `TEST_REPORT.md`.
 
 ## 5. Detection Architecture and Remaining Work
 
@@ -293,6 +308,8 @@ The initial standalone rule engine is implemented as described in Section 4.7.
 It detects selected phrases associated with impersonation, threats, isolation and financial extraction. It produces explainable evidence rather than independently declaring that a scam has occurred.
 
 Its current limitations include incomplete phrase coverage and limited handling of context, negation, quoted speech and speaker identity.
+
+The engine is invoked by the REST transcription endpoint after successful transcript validation. Its structured detection result is returned alongside the transcription response. WebSocket detection integration remains pending.
 
 ### 5.2 Planned: Contextual detection
 
@@ -329,7 +346,24 @@ The future warning workflow will:
 7. Offer trusted-family notification only with the user's consent.
 8. Generate an incident summary that can support a cybercrime report.
 
-The automatic detection-to-warning workflow is not yet implemented.
+**Already implemented:**
+
+- REST transcription-to-detection integration.
+- Structured evidence generation for four scam stages.
+- Returning detection assessments with the REST transcription response.
+- Standalone Gnani Timbre warning synthesis endpoint.
+
+**Remaining integration work:**
+
+1. Connect WebSocket transcript events to the detection engine.
+2. Add contextual reasoning to assess conversational meaning.
+3. Implement explainable risk scoring and validate thresholds using labelled data.
+4. Define a safe warning policy.
+5. Integrate detection-triggered warning delivery through Gnani Timbre.
+6. Implement consent-based trusted-family notifications.
+7. Generate incident summaries supporting cybercrime reporting.
+
+Automatic detection-to-warning orchestration is not yet implemented.
 
 ## 7. Privacy and Security
 
@@ -356,18 +390,21 @@ Current test files:
 - `test_detection_schemas.py`
 - `test_detection_engine.py`
 
-Latest complete automated verification on 2026-11-09:
+Latest complete automated verification on 2026-11-10:
 
 | Test group | Passed |
-|---|---:|
-| Health and REST transcription | 9 |
+|---|---|
+| Health endpoint | 1 |
+| REST transcription | 10 |
 | WebSocket streaming and lifecycle | 10 |
 | TTS service and endpoint | 8 |
 | Detection data schemas | 8 |
-| Detection engine | 27 |
-| **Total** | **62** |
+| Detection engine | 31 |
+| Total | 68 |
 
-Result: **62 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Latest complete automated verification on 2026-11-10: 68 passed, 0 failed, 1 non-failing Starlette deprecation warning.
+
+The REST test suite includes two detection-integration tests. Provider responses are mocked in automated tests; these tests verify the application integration rather than real-world detection accuracy.
 
 Additional live integration checks:
 - REST transcription: one successful live Hindi request.

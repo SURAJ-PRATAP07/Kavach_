@@ -5,6 +5,8 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from app.config import Settings, get_settings
+from app.detection.engine import detect_segments
+from app.detection.schemas import TranscriptSegment
 from app.streaming import router as streaming_router
 from app.tts import TTSServiceError, synthesize_warning
 
@@ -157,7 +159,20 @@ async def transcribe_audio(
             detail="Gnani could not produce a valid transcription.",
         )
 
-    # 7. Return useful transcription information to the client.
+    # 7. Normalise the complete transcript for detection.
+    transcript_segment = TranscriptSegment(
+        text=transcript,
+        source="rest",
+        segment_id="rest-0",
+        segment_index=0,
+        timestamp=None,
+        language_code=settings.gnani_stt_language,
+    )
+
+    # 8. Run the initial rule-based scam-signal detector.
+    detection_result = detect_segments([transcript_segment])
+
+    # 9. Return transcription and explainable detection results.
     return {
         "success": True,
         "transcript": transcript,
@@ -165,6 +180,7 @@ async def transcribe_audio(
         "request_id": result.get("request_id"),
         "processing_time": result.get("processing_time"),
         "end_to_end_latency": result.get("end_to_end_latency"),
+        "detection": detection_result.model_dump(mode="json"),
     }
 
 

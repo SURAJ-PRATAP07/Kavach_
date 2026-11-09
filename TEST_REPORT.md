@@ -15,19 +15,19 @@
 
 ## 2. Automated test summary
 
-Latest complete backend test run on 2026-11-09:
+Latest complete backend test run on 2026-11-10:
 
-**66 passed, 0 failed, 1 non-failing warning.**
+**68 passed, 0 failed, 1 non-failing warning.**
 
 | Test group | Tests | Result |
 |---|---:|---|
-| Health and REST transcription | 9 | PASS |
+| Health endpoint | 1 | PASS |
+| REST transcription | 10 | PASS |
 | WebSocket streaming and lifecycle | 10 | PASS |
 | TTS service and endpoint | 8 | PASS |
 | Detection data schemas | 8 | PASS |
 | Detection engine | 31 | PASS |
-| **Total** | **66** | **PASS** |
-
+| **Total** | **68** | **PASS** |
 Command:
 
 `powershell
@@ -90,9 +90,12 @@ The REST test suite uses mocked provider responses for predictable and isolated 
 | REST-006 | Provider timeout | Gateway timeout handled | PASS |
 | REST-007 | Provider HTTP error | Upstream error handled | PASS |
 | REST-008 | Invalid provider JSON | Invalid response handled | PASS |
-| REST-009 | Health endpoint | Healthy response returned | PASS |
+| REST-009 | Detection result returned | Structured detection result included in response | PASS |
+| REST-010 | Scam signal detected | Matching transcript produces stage evidence in response | PASS |
 
----
+The two detection-integration tests use mocked provider responses. They verify Kavach's REST response and detection integration, not live provider behaviour or real-world detection accuracy.
+
+The health endpoint is tested separately in `backend/tests/test_health.py` (1 test).
 
 ## 4. Live REST API integration verification
 
@@ -331,7 +334,7 @@ Actual result:
 
 ```
 
-The latest complete backend suite reported 66 passed, 0 failed and one non-failing warning. The 31 detection-engine tests are reported separately in Section 10.
+The latest reported complete backend suite contains 68 passing tests, 0 failures and one non-failing warning. The 31 detection-engine tests are reported separately in Section 10.
 
 These tests verify schema validation and serialization only. They do not establish that any scam stage can be detected correctly.
 
@@ -391,7 +394,7 @@ The engine does not yet:
 - Distinguish speakers or quoted speech.
 - Handle all negation and legitimate exceptions.
 - Calculate a numerical or calibrated risk score.
-- Integrate with REST or WebSocket transcription.
+- Integrate with WebSocket streaming.
 - Trigger automatic Gnani Timbre warnings.
 
 No labelled real-world evaluation dataset, detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
@@ -400,14 +403,15 @@ No labelled real-world evaluation dataset, detection accuracy, precision, recall
 
 | Test group | Passed |
 |---|---:|
-| Health and REST transcription | 9 |
+| Health endpoint | 1 |
+| REST transcription | 10 |
 | WebSocket streaming and lifecycle | 10 |
 | TTS service and endpoint | 8 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
-| **Total** | **66** |
+| **Total** | **68** |
 
-Result: **66 passed, 0 failed, 1 non-failing warning.**
+Result: **68 passed, 0 failed, 1 non-failing warning.**
 
 ---
 
@@ -495,18 +499,17 @@ The installed dependency combination requires further compatibility investigatio
 
 | Component | Current assessment |
 |---|---|
-| FastAPI health endpoint | Automated tests PASS |
+| FastAPI health endpoint | 1 automated test PASS |
 | Gnani Prisma REST integration | Live integration PASS |
-| REST automated tests | 9 PASS |
+| REST transcription and detection tests | 10 automated tests PASS |
 | WebSocket endpoint | Implemented and live integration verified |
-| WebSocket mocked tests | 10 PASS |
-| TTS service and endpoint tests | 8 PASS |
-| Detection data-schema tests | 8 PASS |
-| Detection engine tests | 31 PASS |
-| Complete backend automated tests | 66 PASS, 1 warning |
+| WebSocket mocked tests | 10 automated test functions PASS |
+| TTS service and endpoint tests | 8 automated tests PASS |
+| Detection data-schema tests | 8 automated tests PASS |
+| Detection engine tests | 31 automated tests PASS |
+| Complete backend automated tests | 68 PASS, 0 failed, 1 warning |
 | Live WebSocket integration | One Hindi recording successfully transcribed |
-| Detection data schemas | Implemented; 8 automated tests PASS |
-| Detection engine | Implemented; 31 automated tests PASS |
+| REST detection integration | Implemented; automated tests use mocked provider responses |
 | Contextual detection and risk scoring | Not implemented |
 | Gnani Timbre standalone TTS service | Implemented and mock-tested |
 | `POST /synthesize-warning` | Live endpoint verified; playback confirmed for two segments |
@@ -514,8 +517,10 @@ The installed dependency combination requires further compatibility investigatio
 | Frontend | Not implemented |
 | Kavach-Bench | Not implemented |
 
-**Conclusion:** The backend has 66 passing automated tests and one non-failing deprecation warning. Gnani Prisma REST integration has been live-verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. Gnani Timbre TTS has eight passing mocked automated tests and a separately verified live endpoint playback using two warning segments.
+**Conclusion:** The latest complete backend test run contains 68 passing tests, no failures and one non-failing deprecation warning. Gnani Prisma REST integration has been live-verified, and live Prisma WebSocket streaming has been verified with one Hindi recording. Gnani Timbre TTS has eight passing mocked automated tests and a separately verified live endpoint playback using two warning segments.
 
-The initial standalone phrase-based detection engine has 31 passing automated tests and produces explainable evidence for four scam stages. These tests verify the implemented patterns and evidence behaviour; they do not establish real-world scam-detection accuracy.
+The initial phrase-based detection engine has 31 passing automated tests and produces explainable evidence for four scam stages. It is integrated with the REST transcription endpoint; two additional REST tests verify that the endpoint returns structured detection results and detects a configured scam signal using mocked provider responses.
 
-Contextual detection, calibrated risk scoring, detection-to-transcription integration and automatic warning delivery remain unimplemented. These results establish tested backend behaviour and selected live integrations, not production readiness or guaranteed fraud prevention.
+These tests verify implemented patterns, evidence behaviour and REST integration. They do not establish real-world scam-detection accuracy. Contextual detection, calibrated risk scoring, WebSocket detection integration and automatic warning delivery remain unimplemented.
+
+These results establish tested backend behaviour and selected live integrations, not production readiness or guaranteed fraud prevention.

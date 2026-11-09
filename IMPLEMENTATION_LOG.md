@@ -456,16 +456,43 @@ The engine does not yet:
 - Interpret all negation or legitimate exceptions.
 - Calculate a numerical or calibrated risk score.
 - Trigger automatic warnings.
-- Integrate with REST or WebSocket transcription.
+- Integrate detection with WebSocket streaming.
 - Invoke Gnani Timbre automatically.
 
 No real-world detection accuracy or false-positive/false-negative rate has been established.
 
-### Repository status
+### Stage 1 ? REST transcription and detection integration
 
-Implementation and tests are currently uncommitted. Documentation updates and final Git review are pending.
+**Status:** Implemented and automated-test verified; Git commit pending.
 
+**Date:** 2026-11-10
 
+#### Changes
+
+- Integrated the detection engine with the `POST /transcribe` REST endpoint.
+- After successful provider transcript validation, normalised the transcript into a `TranscriptSegment`.
+- Set the segment source to `rest` and retained the configured language metadata.
+- Invoked `detect_segments` on the normalised transcript segment.
+- Added the structured detection result to the existing REST response without removing the original transcription fields.
+- Added `test_transcribe_returns_detection_result` to verify the detection response structure.
+- Added `test_transcribe_detects_scam_signal` to verify that a configured scam phrase produces detection evidence.
+
+#### Verification
+
+- REST transcription test file: 10 tests collected.
+- Complete backend suite: 68 passed, 0 failed, 1 non-failing warning in the latest run.
+- The two integration tests use mocked provider responses. They verify application integration, not live provider behaviour or real-world detection accuracy.
+- Python compilation and `git diff --check` passed during the 2026-11-10 verification.
+
+#### Scope and limitations
+
+This integration applies to REST transcription only. WebSocket detection integration and automatic Timbre warning triggering remain pending.
+
+The phrase-based detector is not a contextual scam classifier. No real-world detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
+
+#### Repository status
+
+The implementation, tests and documentation changes are awaiting final review and Git commit/push.
 ---
 
 ## Follow-up - Detection matching robustness
@@ -504,7 +531,3 @@ This update improves matching when whitespace varies in a transcript. It does no
 The five regression tests establish behaviour for their specific test inputs. They do not establish robustness across all Hindi/Hinglish speech or transcription errors.
 
 The pilot evaluation dataset remains empty and has not been used to calculate detection metrics.
-
-### Repository status
-
-The implementation, tests and documentation updates are awaiting final review and Git commit/push.
