@@ -531,3 +531,89 @@ This update improves matching when whitespace varies in a transcript. It does no
 The five regression tests establish behaviour for their specific test inputs. They do not establish robustness across all Hindi/Hinglish speech or transcription errors.
 
 The pilot evaluation dataset remains empty and has not been used to calculate detection metrics.
+
+
+---
+
+## Stage 2 — WebSocket streaming and detection integration
+
+**Status:** Implemented and automated-test verified; Git commit and push pending.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Connect the existing phrase-based detection engine to the Gnani Prisma WebSocket transcription workflow so that transcript events receive structured scam-stage assessments.
+
+### Implementation
+
+Updated:
+- `backend/app/streaming.py`
+- `backend/tests/test_streaming.py`
+
+In `backend/app/streaming.py`:
+- Imported `detect_segments` and `TranscriptSegment`.
+- Added `build_stream_detection(payload)` to convert an individual provider transcript event into the application's detection input schema.
+- Set the transcript source to `streaming`.
+- Preserved available segment metadata, including segment ID, segment index, timestamp, audio duration and detected language code where valid.
+- Added validation for optional metadata before constructing the Pydantic transcript segment.
+- Handled empty or invalid transcript text by returning an empty structured detection result rather than interrupting the streaming workflow.
+- Updated `forward_provider_events()` to attach a `detection` object to each event whose type is `transcript`.
+- Preserved the original serialized provider event fields.
+
+Each transcript event is analysed independently. This implementation does not aggregate evidence across events or calculate a conversation-level risk score.
+
+### Automated tests
+
+Added four WebSocket detection-integration tests:
+1. `test_websocket_detects_arrest_threat`
+   - Verifies that a configured arrest-threat phrase produces `THREAT_ARREST` evidence.
+2. `test_websocket_harmless_transcript_has_no_evidence`
+   - Verifies that a harmless transcript produces no scam evidence.
+3. `test_websocket_detection_preserves_metadata`
+   - Verifies preservation of transcript metadata and its relevant detection evidence.
+4. `test_websocket_multiple_transcripts_have_independent_detection`
+   - Verifies that multiple transcript events receive independent detection results.
+
+The tests use a mocked Gnani SDK client. They verify the application's event-processing and detection integration, not live provider detection accuracy.
+
+### Verification
+
+Latest complete backend test run:
+
+**72 passed, 0 failed, 1 non-failing warning in 6.39 seconds.**
+
+Test breakdown:
+
+| Test group | Passed |
+|---|---:|
+| Health endpoint | 1 |
+| REST transcription | 10 |
+| WebSocket streaming, lifecycle and detection | 14 |
+| TTS service and endpoint | 8 |
+| Detection schemas | 8 |
+| Detection engine | 31 |
+| **Total** | **72** |
+
+Additional verification:
+- Python compilation using `python -m compileall`: passed.
+- `git diff --check`: passed.
+
+The test suite also experienced intermittent failures during earlier WebSocket disconnect-test attempts. The final reported complete suite passed. These earlier attempts should not be counted as passing test runs.
+
+### Scope and limitations
+
+This milestone adds per-event detection to WebSocket streaming. It does not implement:
+- Cumulative detection across multiple transcript events.
+- Conversation-level contextual reasoning.
+- Speaker identification or reliable interpretation of reported speech.
+- A numerical or calibrated risk score.
+- Automatic warning triggering through Gnani Timbre.
+- Trusted-family notifications.
+- Real-world scam-detection accuracy evaluation.
+
+The existing phrase-based detection limitations remain applicable. No precision, recall, false-positive rate or false-negative rate has been established.
+
+### Repository status
+
+The implementation, tests and documentation updates are awaiting final staged-diff review and Git commit/push.

@@ -295,7 +295,13 @@ Duplicate evidence for the same rule is suppressed within an individual segment.
 
 This is a standalone phrase-based signal detector, not a contextual scam classifier. It does not yet reliably interpret general negation, quoted speech, speaker identity or full conversational context. Qualitative signal strength is not a calibrated probability or numerical risk score.
 
-The engine is integrated with the REST transcription endpoint. WebSocket streaming integration and automatic Timbre warning triggering remain pending.
+The engine is integrated with both the REST transcription endpoint and WebSocket streaming.
+
+For REST, detection runs after successful transcript validation and is included in the transcription response.
+
+For WebSocket streaming, each transcript event is independently analysed and forwarded with its own structured detection result. Available source and segment metadata are preserved.
+
+Neither integration currently performs cumulative conversation-level analysis. Automatic Timbre warning triggering remains pending.
 
 Automated verification: 31 detection-engine tests passed. See `TEST_REPORT.md`.
 
@@ -309,7 +315,11 @@ It detects selected phrases associated with impersonation, threats, isolation an
 
 Its current limitations include incomplete phrase coverage and limited handling of context, negation, quoted speech and speaker identity.
 
-The engine is invoked by the REST transcription endpoint after successful transcript validation. Its structured detection result is returned alongside the transcription response. WebSocket detection integration remains pending.
+The engine is invoked by both the REST transcription endpoint and the WebSocket streaming workflow.
+
+For REST, its structured detection result is returned alongside the transcription response. For WebSocket streaming, each transcript event receives an independent detection result.
+
+This integration does not yet combine evidence across transcript events or calculate a conversation-level risk score.
 
 ### 5.2 Planned: Contextual detection
 
@@ -349,13 +359,14 @@ The future warning workflow will:
 **Already implemented:**
 
 - REST transcription-to-detection integration.
+- WebSocket transcript-event-to-detection integration.
 - Structured evidence generation for four scam stages.
-- Returning detection assessments with the REST transcription response.
+- Independent detection results attached to individual WebSocket transcript events.
 - Standalone Gnani Timbre warning synthesis endpoint.
 
 **Remaining integration work:**
 
-1. Connect WebSocket transcript events to the detection engine.
+1. Add cumulative conversation-level analysis across transcript events.
 2. Add contextual reasoning to assess conversational meaning.
 3. Implement explainable risk scoring and validate thresholds using labelled data.
 4. Define a safe warning policy.
@@ -393,23 +404,25 @@ Current test files:
 Latest complete automated verification on 2026-11-10:
 
 | Test group | Passed |
-|---|---|
+|---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming and lifecycle | 10 |
+| WebSocket streaming, lifecycle and detection | 14 |
 | TTS service and endpoint | 8 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
-| Total | 68 |
+| **Total** | **72** |
 
-Latest complete automated verification on 2026-11-10: 68 passed, 0 failed, 1 non-failing Starlette deprecation warning.
+Result: **72 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
-The REST test suite includes two detection-integration tests. Provider responses are mocked in automated tests; these tests verify the application integration rather than real-world detection accuracy.
+The WebSocket suite includes four detection-integration tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 
 Additional live integration checks:
 - REST transcription: one successful live Hindi request.
 - WebSocket streaming: one live Hindi recording.
 - TTS: one live endpoint request with playback confirmed complete and understandable.
+
+Live WebSocket detection has not yet been evaluated against a real labelled scam conversation. The current automated tests verify the detection integration using mocked transcript events.
 
 Automated WebSocket and TTS tests use mocked provider clients. Live integration checks are separate from automated tests.
 
@@ -472,7 +485,6 @@ This structure reflects the current known implementation. Additional modules wil
 5. Design and implement contextual detection, including handling of negation, quoted speech and conversational context.
 6. Implement explainable risk scoring and validate thresholds against labelled data.
 7. Define a safe warning policy and integrate the existing standalone TTS service.
-8. Integrate detection with REST and WebSocket transcript workflows.
-9. Build the frontend and consent workflow.
-10. Implement trusted-family notifications, incident summaries and Kavach-Bench.
-11. Complete end-to-end, privacy, security and performance testing.
+8. Build the frontend and consent workflow.
+9. Implement trusted-family notifications, incident summaries and Kavach-Bench.
+10. Complete end-to-end, privacy, security and performance testing.

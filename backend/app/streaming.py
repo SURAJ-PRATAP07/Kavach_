@@ -1,10 +1,13 @@
 
 import asyncio
 import json
+import math
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from app.config import Settings, get_settings
+from app.detection.engine import detect_segments
+from app.detection.schemas import TranscriptSegment
 from gnani.stt import GnaniSTTStreamClient
 
 
@@ -66,6 +69,56 @@ def serialize_provider_event(event) -> dict:
         }
 
     return {"type": "provider_event", "event": event_name}
+
+
+def build_stream_detection(payload: dict) -> dict:
+    """Analyse one streaming transcript event without changing its metadata."""
+    text = payload.get("text")
+    # Empty or invalid transcript text should not break the WebSocket session.
+    if not isinstance(text, str) or not text.strip():
+        return detect_segments([]).model_dump(mode="json")
+
+    segment_data = {
+        "text": text,
+        "source": "streaming",
+    }
+    segment_id = payload.get("segment_id")
+    if isinstance(segment_id, str):
+        segment_data["segment_id"] = segment_id
+
+    segment_index = payload.get("segment_index")
+    if (
+        isinstance(segment_index, int)
+        and not isinstance(segment_index, bool)
+        and segment_index >= 0
+    ):
+        segment_data["segment_index"] = segment_index
+
+    timestamp = payload.get("timestamp")
+    if isinstance(timestamp, str):
+        segment_data["timestamp"] = timestamp
+    elif (
+        isinstance(timestamp, (int, float))
+        and not isinstance(timestamp, bool)
+        and math.isfinite(timestamp)
+    ):
+        segment_data["timestamp"] = timestamp
+
+    audio_duration_ms = payload.get("audio_duration_ms")
+    if (
+        isinstance(audio_duration_ms, (int, float))
+        and not isinstance(audio_duration_ms, bool)
+        and math.isfinite(audio_duration_ms)
+        and audio_duration_ms >= 0
+    ):
+        segment_data["audio_duration_ms"] = audio_duration_ms
+
+    language_code = payload.get("detected_language_code")
+    if isinstance(language_code, str):
+        segment_data["language_code"] = language_code
+
+    segment = TranscriptSegment(**segment_data)
+    return detect_segments([segment]).model_dump(mode="json")
 
 
 @router.websocket("/ws/transcribe")
@@ -185,6 +238,9 @@ async def stream_transcription(
 
         async for event in client.events():
             payload = serialize_provider_event(event)
+
+            if payload["type"] == "transcript":
+                payload["detection"] = build_stream_detection(payload)
 
             if payload["type"] == "error":
                 await enqueue_message(payload, wait_until_sent=True)

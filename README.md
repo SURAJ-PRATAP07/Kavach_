@@ -8,28 +8,28 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2: Backend scaffold, Gnani speech integrations, detection schemas and initial phrase-based detection engine.**
+**Milestones 0–4.2 + Detection Integrations: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, and REST/WebSocket detection integrations.**
 
 Currently implemented and verified:
 
 - FastAPI backend and health-check endpoint.
-- Gnani Prisma v2.5 REST transcription integration.
-- Gnani Prisma WebSocket streaming integration, live-verified with one Hindi recording.
+- Gnani Prisma v2.5 REST transcription integration with detection assessments.
+- Gnani Prisma WebSocket streaming integration with per-event detection assessments, live-verified with one Hindi recording.
 - Hindi transcription configuration (`hi-IN`).
 - Audio upload validation and application-level 10 MB upload limit.
 - Provider error and timeout handling.
 - Standalone Gnani Timbre v3.0 safety-warning TTS endpoint (`POST /synthesize-warning`), live-verified with two romanized Hindi warning segments.
 - Detection data schemas for transcript segments, scam stages, evidence and stage assessments.
-- Initial standalone phrase-based detection for impersonation, threats, isolation and financial extraction.
+- Initial phrase-based detection for impersonation, threats, isolation and financial extraction.
 - Selected English, romanized Hindi/Hinglish and Devanagari phrase patterns.
 - Explainable detection evidence with rule IDs, matched phrases, reasons and available transcript metadata.
-- Automated backend tests: **62 passed, 0 failed, 1 non-failing deprecation warning**.
+- Automated backend tests: **72 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions, integration of detection with REST/WebSocket transcription, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+**Not yet implemented:** cumulative conversation-level detection across events, contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions and triggering through Gnani Timbre, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
 
-The detection engine is currently standalone. The TTS endpoint is also standalone and is not automatically triggered by detection.
+The TTS endpoint is standalone and is not automatically triggered by detection.
 
 ## Planned capabilities
 
@@ -47,29 +47,29 @@ The detection engine is currently standalone. The TTS endpoint is also standalon
 ## Architecture overview
 
 `	ext
-Consented audio input
+Consented audio input (REST / WebSocket)
         |
         v
    Kavach Backend
         |
         v
- Gnani Prisma STT
+  Gnani Prisma STT
         |
         v
-      Transcript
+   Transcript Output
         |
-        +------> Standalone phrase-based detection engine
+        +------> Phrase-based detection engine (REST & WebSocket per-event)
         |                  |
         |                  v
         |          Explainable stage evidence
         |
         v
- Future contextual detection and risk scoring
+ Future cumulative conversation-level & contextual detection
         |
         v
- Future warning and response policy
+ Future calibrated risk scoring & warning policy
         |
-        +------> Gnani Timbre TTS
+        +------> Gnani Timbre TTS (Standalone endpoint verified)
         |
         +------> Consented family notification
         |
@@ -77,7 +77,7 @@ Consented audio input
  Future incident summary
 `
 
-The phrase-based detection engine and the standalone TTS endpoint are implemented, but neither is yet integrated into an automatic transcription-to-warning workflow. Contextual reasoning, risk scoring, notifications and incident summaries remain planned.
+The phrase-based detection engine is integrated with both REST transcription and WebSocket streaming (analysing each transcript event independently). The standalone TTS endpoint is also implemented. Cumulative conversation-level detection, contextual reasoning, calibrated risk scoring, automated warning delivery, notifications and incident summaries remain planned.
 
 ## Technology stack
 
@@ -244,22 +244,39 @@ Synthesizes the currently configured standalone Hindi safety warning using Gnani
 
 Streams audio to Gnani Prisma and forwards streaming events. The current implementation has been live-verified with one Hindi recording. See `TEST_REPORT.md` for verification scope and limitations.
 
-### Detection schemas and initial rule-based engine
+### Scam-stage detection
 
-The backend includes validated Pydantic models in ackend/app/detection/schemas.py. These define transcript segments, scam stages and explainable evidence structures.
+Kavach currently implements an initial phrase-based detection engine covering four potential scam stages:
 
-The standalone detection engine in ackend/app/detection/engine.py uses handcrafted phrase patterns from ackend/app/detection/rules.py to identify selected signals across four stages:
+1. Impersonation and authority claims.
+2. Threats and arrest-related intimidation.
+3. Isolation and secrecy instructions.
+4. Financial extraction and purported safe-account transfers.
 
-- Impersonation.
-- Threats.
-- Isolation.
-- Financial extraction.
+The engine supports selected English, romanized Hindi/Hinglish and Devanagari Hindi phrases.
 
-The initial patterns cover selected English, romanized Hindi/Hinglish and Devanagari phrases. The engine preserves matched text, original transcript text, rule IDs, explanations and available segment metadata.
+Detection is integrated with both transcription workflows:
 
-The engine has **27 passing automated tests**. The complete backend suite has **62 passing tests**.
+- REST: detection results are included in the /transcribe response.
+- WebSocket: each transcript event receives an independent structured detection result.
 
-This is an initial phrase-based signal detector, not a contextual scam classifier. It does not provide a calibrated numerical risk score and is not yet connected to REST transcription, WebSocket streaming or automatic warning delivery.
+The system preserves matched phrases, original transcript text, rule identifiers, explanations, qualitative signal strengths and available segment metadata.
+
+**Current limitations:** Detection is phrase-based, not general contextual understanding. WebSocket events are not yet combined into a cumulative conversation-level assessment. Signal strengths are qualitative rather than calibrated probabilities. Automatic warning triggering is not yet integrated.
+
+### Automated testing
+
+Latest complete backend verification on 2026-11-10:
+
+- 72 tests passed.
+- 0 tests failed.
+- 1 non-failing deprecation warning.
+
+The WebSocket test group includes 14 tests covering streaming, lifecycle handling and per-event detection integration.
+
+Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis.
+
+These results do not establish real-world transcription or scam-detection accuracy.
 
 ## Testing and evaluation
 
@@ -271,7 +288,7 @@ The project maintains:
 - ARCHITECTURE.md — System architecture and design decisions.
 - IMPLEMENTATION_LOG.md — Development history.
 
-The 62 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 72 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -294,6 +311,9 @@ The 62 passing automated backend tests do not establish real-world scam detectio
 - [x] Real-time Prisma WebSocket integration (one live Hindi sample verified).
 - [x] Detection data schemas and evidence structures.
 - [x] Initial standalone phrase-based scam-stage detection.
+- [x] REST transcription-to-detection integration.
+- [x] Real-time WebSocket transcript-event-to-detection integration.
+- [ ] Cumulative conversation-level detection across events.
 - [ ] Contextual scam-stage detection and improved negation/context handling.
 - [ ] Evaluation against labelled legitimate and scam conversations.
 - [ ] Risk scoring and warning policy.

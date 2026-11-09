@@ -15,14 +15,22 @@ from starlette.websockets import WebSocketDisconnect
 class StreamTranscriptEvent:
     """Small stand-in for a Gnani transcript event."""
 
-    def __init__(self, text):
+    def __init__(
+        self,
+        text,
+        segment_id="test-segment",
+        segment_index=0,
+        timestamp=None,
+        audio_duration_ms=1000,
+        detected_language_code="hi-IN",
+    ):
         self.text = text
-        self.segment_id = "test-segment"
-        self.segment_index = 0
-        self.audio_duration_ms = 1000
+        self.segment_id = segment_id
+        self.segment_index = segment_index
+        self.audio_duration_ms = audio_duration_ms
         self.latency = 0.2
-        self.timestamp = None
-        self.detected_language_code = "hi-IN"
+        self.timestamp = timestamp
+        self.detected_language_code = detected_language_code
 
 
 class StreamErrorEvent:
@@ -77,9 +85,17 @@ class FakeGnaniStreamClient:
                 await self.event_queue.put(None)
 
             if self.silence_count == streaming.SILENCE_FRAMES_ON_STOP:
-                await self.event_queue.put(
-                    StreamTranscriptEvent("Namaste, yeh ek test hai.")
+                transcript_events = getattr(
+                    self.__class__,
+                    "transcript_events",
+                    None,
                 )
+                if transcript_events is None:
+                    transcript_events = [
+                        StreamTranscriptEvent("Namaste, yeh ek test hai.")
+                    ]
+                for transcript_event in transcript_events:
+                    await self.event_queue.put(transcript_event)
 
     async def events(self):
         while True:
@@ -119,6 +135,7 @@ def configured_client(monkeypatch):
     FakeGnaniStreamClient.constructor_failure = False
     FakeGnaniStreamClient.provider_error_after_silence_frames = None
     FakeGnaniStreamClient.end_events_after_silence_frames = None
+    FakeGnaniStreamClient.transcript_events = None
 
     settings = Settings(
         gnani_api_key="test-api-key",
@@ -136,6 +153,32 @@ def configured_client(monkeypatch):
         yield client
 
     app.dependency_overrides.pop(get_settings, None)
+
+
+def receive_streaming_transcripts(configured_client):
+    """Run a streaming session and collect transcript messages."""
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as websocket:
+        ready = websocket.receive_json()
+        assert ready["type"] == "ready"
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        received_messages = []
+        while True:
+            message = websocket.receive_json()
+            received_messages.append(message)
+            if message["type"] == "stopped":
+                break
+
+    return [
+        message
+        for message in received_messages
+        if message["type"] == "transcript"
+    ]
+
 
 def test_websocket_stream_and_stop(configured_client):
     """Test connection, audio forwarding and final transcript."""
@@ -177,12 +220,115 @@ def test_websocket_stream_and_stop(configured_client):
         assert stopped["type"] == "stopped"
         assert stopped["transcript_received_after_stop_command"] is True
 
+        websocket.close()
+
     fake_client = FakeGnaniStreamClient.instances[-1]
 
     assert fake_client.audio_chunks[0] == audio_frame
     assert fake_client.silence_count == 32
     assert len(fake_client.audio_chunks) == 33
     assert fake_client.closed is True
+
+
+def test_websocket_detects_arrest_threat(
+    configured_client,
+):
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("You will be arrested.")
+    ]
+    transcripts = receive_streaming_transcripts(configured_client)
+    assert len(transcripts) == 1
+    detection = transcripts[0]["detection"]
+    threat_assessment = next(
+        assessment
+        for assessment in detection["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+    assert len(threat_assessment["evidence"]) == 1
+    evidence = threat_assessment["evidence"][0]
+    assert evidence["rule_id"] == "THREAT_ARREST"
+    assert evidence["matched_text"] == "You will be arrested"
+    assert evidence["source"] == "streaming"
+
+
+def test_websocket_harmless_transcript_has_no_evidence(
+    configured_client,
+):
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Namaste, yeh ek test hai.")
+    ]
+    transcripts = receive_streaming_transcripts(configured_client)
+    assert len(transcripts) == 1
+    detection = transcripts[0]["detection"]
+    assert detection["segments_analyzed"] == 1
+    assert all(
+        not assessment["evidence"]
+        for assessment in detection["stage_assessments"]
+    )
+
+
+def test_websocket_detection_preserves_metadata(
+    configured_client,
+):
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent(
+            text="You will be arrested.",
+            segment_id="metadata-test-1",
+            segment_index=7,
+            timestamp=12.5,
+            audio_duration_ms=1500,
+            detected_language_code="en-IN",
+        )
+    ]
+    transcripts = receive_streaming_transcripts(configured_client)
+    assert len(transcripts) == 1
+    transcript = transcripts[0]
+    detection = transcript["detection"]
+    threat_assessment = next(
+        assessment
+        for assessment in detection["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+    evidence = threat_assessment["evidence"][0]
+    assert transcript["segment_id"] == "metadata-test-1"
+    assert transcript["segment_index"] == 7
+    assert transcript["timestamp"] == 12.5
+    assert transcript["detected_language_code"] == "en-IN"
+    assert evidence["segment_id"] == "metadata-test-1"
+    assert evidence["segment_index"] == 7
+
+
+def test_websocket_multiple_transcripts_have_independent_detection(
+    configured_client,
+):
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent(
+            text="You will be arrested.",
+            segment_id="segment-1",
+            segment_index=0,
+        ),
+        StreamTranscriptEvent(
+            text="Namaste, yeh ek test hai.",
+            segment_id="segment-2",
+            segment_index=1,
+        ),
+    ]
+    transcripts = receive_streaming_transcripts(configured_client)
+    assert len(transcripts) == 2
+    first_detection = transcripts[0]["detection"]
+    second_detection = transcripts[1]["detection"]
+    first_threat = next(
+        assessment
+        for assessment in first_detection["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+    second_threat = next(
+        assessment
+        for assessment in second_detection["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+    assert len(first_threat["evidence"]) == 1
+    assert len(second_threat["evidence"]) == 0
 
 
 def test_websocket_closes_provider_when_browser_disconnects(

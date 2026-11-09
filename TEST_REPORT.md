@@ -524,3 +524,92 @@ The initial phrase-based detection engine has 31 passing automated tests and pro
 These tests verify implemented patterns, evidence behaviour and REST integration. They do not establish real-world scam-detection accuracy. Contextual detection, calibrated risk scoring, WebSocket detection integration and automatic warning delivery remain unimplemented.
 
 These results establish tested backend behaviour and selected live integrations, not production readiness or guaranteed fraud prevention.
+
+
+---
+
+## Test Report — WebSocket Detection Integration
+
+**Date:** 2026-11-10
+
+**Milestone:** Stage 2 — WebSocket streaming and detection integration
+
+### Environment:
+- Operating system: Windows
+- Python: 3.13.5
+- pytest: 9.2.0
+- Backend framework: FastAPI
+- Streaming SDK: `gnani-vachana==0.9.0`
+
+### 1. Complete backend test suite
+
+Result: **72 passed, 0 failed, 1 non-failing warning.**
+
+| Test group | Passed | Failed |
+|---|---:|---:|
+| Health endpoint | 1 | 0 |
+| REST transcription | 10 | 0 |
+| WebSocket streaming, lifecycle and detection | 14 | 0 |
+| TTS service and endpoint | 8 | 0 |
+| Detection schemas | 8 | 0 |
+| Detection engine | 31 | 0 |
+| **Total** | **72** | **0** |
+
+Latest reported execution time: 6.39 seconds.
+
+### 2. WebSocket detection integration tests
+
+| Test | Expected behaviour | Result |
+|---|---|---|
+| `test_websocket_detects_arrest_threat` | Arrest-threat phrase produces `THREAT_ARREST` evidence | PASS |
+| `test_websocket_harmless_transcript_has_no_evidence` | Harmless transcript produces no scam evidence | PASS |
+| `test_websocket_detection_preserves_metadata` | Transcript and detection evidence retain relevant metadata | PASS |
+| `test_websocket_multiple_transcripts_have_independent_detection` | Each transcript event receives an independent detection result | PASS |
+
+These tests use a mocked Gnani SDK client and controlled transcript events. They establish application-level integration behaviour, not real-world detection accuracy.
+
+### 3. Additional verification
+
+| Check | Expected result | Observed result |
+|---|---|---|
+| Python compilation | No syntax or compilation errors | PASS |
+| `git diff --check` | No whitespace errors in diff | PASS |
+| Full backend pytest suite | All tests pass | PASS |
+
+### 4. Live integration evidence
+
+| Component | Verification performed | Result |
+|---|---|---|
+| Prisma REST | One live Hindi transcription request | HTTP 200 |
+| Prisma WebSocket | One live Hindi audio recording | Provider event flow received |
+| Timbre TTS | One live warning synthesis request | HTTP 200 |
+| TTS playback | Two romanized Hindi warning segments | Playback confirmed complete and understandable |
+
+Live transcription and TTS checks are separate from mocked automated tests. The WebSocket detection integration has not yet been evaluated against a real labelled scam conversation.
+
+### 5. Warning and known issues
+
+The test suite reports one non-failing Starlette deprecation warning related to using `httpx` with `starlette.testclient`. This warning does not cause the current test suite to fail. Dependency compatibility remains under investigation.
+
+Earlier WebSocket disconnect-test attempts produced intermittent failures. The final reported complete suite passed, but the underlying cause of those earlier failures should not be considered resolved solely from the final passing run.
+
+### 6. Testing limitations
+
+The current tests do not establish:
+- Hindi/Hinglish transcription accuracy across a representative dataset.
+- Robustness against noisy or telephony-compressed audio.
+- Scam-detection precision, recall, false-positive rate or false-negative rate.
+- Conversation-level contextual understanding.
+- Automatic warning latency or warning effectiveness.
+- Trusted-family notification correctness.
+- Production-scale concurrency or performance.
+
+The pilot evaluation dataset remains empty. No benchmark metrics have been calculated.
+
+### 7. Overall milestone conclusion
+
+Stage 2 WebSocket detection integration is implemented and automated-test verified.
+
+The backend can now attach an independent structured detection result to each WebSocket transcript event.
+
+Cumulative conversation-level detection, contextual reasoning, calibrated risk scoring, automatic TTS warning delivery and evaluation against labelled conversations remain pending.
