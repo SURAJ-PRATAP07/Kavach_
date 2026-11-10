@@ -910,7 +910,7 @@ Frontend audio playback orchestration, streaming audio transport, and playback r
 - Backend framework: FastAPI / Starlette
 - Speech synthesis: Gnani Timbre v3.0
 
-### New integration tests
+### New integration and lifecycle hardening tests
 
 File: `backend/tests/test_streaming.py`
 
@@ -921,25 +921,35 @@ File: `backend/tests/test_streaming.py`
 | `test_warning_not_triggered_without_consent` | Verifies policy escalation without consent generates no synthesis and sends `CONSENT_NOT_GRANTED` in decision | PASS |
 | `test_duplicate_warning_suppression_in_same_session` | Verifies repeat warning phrases suppress secondary speech triggers (`WARNING_ALREADY_SENT`) | PASS |
 | `test_warning_synthesis_failure_handled_gracefully` | Verifies `TTSServiceError` emits `warning_synthesis_error` without aborting the streaming session | PASS |
-| `test_session_isolation_for_warning_trigger` | Verifies state and consent isolation across independent WebSocket sessions | PASS |
+| `test_session_isolation_for_warning_trigger` | Verifies state and consent isolation across sequential independent WebSocket sessions | PASS |
+| `test_warning_delivery_acknowledgement_marks_sent_on_success` | Verifies that successful transmission of metadata and audio frames marks the warning as sent | PASS |
+| `test_warning_tts_failure_does_not_retry_on_later_transcripts` | Verifies that a failed synthesis attempt prevents subsequent synthesis retries within that session | PASS |
+| `test_invalid_wav_bytes_rejected_before_delivery` | Verifies that non-WAV data is rejected before metadata and binary transmission | PASS |
+| `test_empty_wav_payload_rejected` | Verifies that empty audio byte payloads are caught and rejected | PASS |
+| `test_incorrect_sample_rate_rejected` | Verifies that sample rates other than 16,000 Hz are rejected | PASS |
+| `test_incorrect_channel_count_rejected` | Verifies that multichannel audio (e.g. stereo) is rejected | PASS |
+| `test_incorrect_sample_width_rejected` | Verifies that sample widths other than 16-bit (2 bytes) are rejected | PASS |
+| `test_metadata_transmission_failure_prevents_warning_marked_sent` | Verifies delivery lifecycle guards against premature success state | PASS |
+| `test_validate_synthesized_wav_helper_direct` | Directly validates format validation helper error conditions | PASS |
+| `test_transcription_continues_after_tts_error` | Verifies that ongoing transcription continues normally after recoverable TTS failure | PASS |
 
-### Complete backend test results (Stage 4.4)
+### Complete backend test results (Stage 4.4 Hardened)
 
 | Test group | Passed |
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection, consent & warning triggering | 28 |
+| WebSocket streaming, lifecycle, detection, consent, & warning triggering | 38 |
 | TTS service & endpoints | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **106** |
+| **Total** | **116** |
 
-Result: **106 passed, 0 failed, 1 non-failing warning.**
+Result: **116 passed, 0 failed, 1 non-failing warning.**
 
-Duration: ~16.8 seconds.
+Duration: ~29.8 seconds.
 
 ### Verification summary
 

@@ -20,6 +20,65 @@ from gnani.stt import GnaniSTTStreamClient
 
 logger = logging.getLogger(__name__)
 
+# Expected audio format constants for synthesized WAV validation
+EXPECTED_WAV_CHANNELS = 1
+EXPECTED_WAV_SAMPLE_RATE = 16000
+EXPECTED_WAV_SAMPLE_WIDTH = 2
+EXPECTED_WAV_COMPRESSION = "NONE"
+
+
+def validate_synthesized_wav(audio_bytes: bytes) -> tuple[int, float]:
+    """Validate synthesized WAV data matches the expected 16kHz mono 16-bit PCM format.
+
+    Returns:
+        tuple[int, float]: (byte_length, duration_seconds)
+
+    Raises:
+        ValueError: if the payload is not valid WAV, empty, or does not match format constraints.
+    """
+    if not isinstance(audio_bytes, bytes):
+        raise ValueError("Audio payload must be raw bytes.")
+
+    if len(audio_bytes) == 0:
+        raise ValueError("Audio payload is empty.")
+
+    try:
+        with wave.open(BytesIO(audio_bytes), "rb") as reader:
+            channels = reader.getnchannels()
+            sample_rate = reader.getframerate()
+            sample_width = reader.getsampwidth()
+            comptype = reader.getcomptype()
+            num_frames = reader.getnframes()
+
+            if channels != EXPECTED_WAV_CHANNELS:
+                raise ValueError(
+                    f"Unexpected WAV channel count: {channels}. Expected {EXPECTED_WAV_CHANNELS}."
+                )
+
+            if sample_rate != EXPECTED_WAV_SAMPLE_RATE:
+                raise ValueError(
+                    f"Unexpected WAV sample rate: {sample_rate}. Expected {EXPECTED_WAV_SAMPLE_RATE}."
+                )
+
+            if sample_width != EXPECTED_WAV_SAMPLE_WIDTH:
+                raise ValueError(
+                    f"Unexpected WAV sample width: {sample_width}. Expected {EXPECTED_WAV_SAMPLE_WIDTH}."
+                )
+
+            if comptype != EXPECTED_WAV_COMPRESSION:
+                raise ValueError(
+                    f"Unexpected WAV compression type: {comptype}. Expected uncompressed PCM."
+                )
+
+            if num_frames <= 0:
+                raise ValueError("WAV file contains zero audio frames.")
+
+            duration = round(num_frames / sample_rate, 3)
+            return len(audio_bytes), duration
+
+    except wave.Error as exc:
+        raise ValueError(f"Invalid WAV container: {exc}") from exc
+
 
 router = APIRouter()
 
@@ -143,6 +202,7 @@ async def stream_transcription(
     # Spoken safety warnings require explicit consent.
     # Consent belongs to this WebSocket connection only.
     warning_consent_enabled = False
+    warning_attempted = False
     warning_already_sent = False
     warning_in_progress = False
     stop_requested = asyncio.Event()
@@ -247,7 +307,7 @@ async def stream_transcription(
     async def forward_provider_events():
         """Forward provider events and detect provider errors."""
 
-        nonlocal warning_already_sent, warning_in_progress
+        nonlocal warning_attempted, warning_already_sent, warning_in_progress
 
         async for event in client.events():
             payload = serialize_provider_event(event)
@@ -307,8 +367,10 @@ async def stream_transcription(
             if (
                 payload["type"] == "transcript"
                 and decision.should_speak
+                and not warning_attempted
                 and not warning_in_progress
             ):
+                warning_attempted = True
                 warning_in_progress = True
 
                 try:
@@ -332,35 +394,60 @@ async def stream_transcription(
                         api_key,
                     )
 
-                    wav_duration_seconds = None
                     try:
-                        wav_reader = wave.open(BytesIO(audio_bytes), "rb")
-                        wav_duration_seconds = round(
-                            wav_reader.getnframes() / wav_reader.getframerate(),
-                            3,
+                        audio_len, duration = validate_synthesized_wav(
+                            audio_bytes
                         )
-                        wav_reader.close()
-                    except Exception:
-                        pass
+                    except ValueError as val_err:
+                        logger.warning(
+                            "Synthesized WAV validation failed: %s", val_err
+                        )
+                        await enqueue_message({
+                            "type": "warning_synthesis_error",
+                            "message": (
+                                "Could not generate a spoken safety warning. "
+                                "Invalid audio format received from synthesis."
+                            ),
+                        })
+                        continue
 
-                    await enqueue_message({
-                        "type": "safety_warning",
-                        "level": decision.level.value,
-                        "reason_codes": list(decision.reason_codes),
-                        "matched_rule_ids": list(decision.matched_rule_ids),
-                        "distinct_stages": list(decision.distinct_stages),
-                        "audio_format": "wav",
-                        "audio_bytes": len(audio_bytes),
-                        "audio_duration_seconds": wav_duration_seconds,
-                        "message": (
-                            "Kavach has detected multiple scam indicators "
-                            "in this conversation. A safety warning has "
-                            "been generated."
-                        ),
-                    })
+                    # Transmit JSON metadata first and wait for successful delivery.
+                    meta_sent = await enqueue_message(
+                        {
+                            "type": "safety_warning",
+                            "level": decision.level.value,
+                            "reason_codes": list(decision.reason_codes),
+                            "matched_rule_ids": list(decision.matched_rule_ids),
+                            "distinct_stages": list(decision.distinct_stages),
+                            "audio_format": "wav",
+                            "audio_bytes": audio_len,
+                            "audio_duration_seconds": duration,
+                            "message": (
+                                "Kavach has detected multiple scam indicators "
+                                "in this conversation. A safety warning has "
+                                "been generated."
+                            ),
+                        },
+                        wait_until_sent=True,
+                    )
 
-                    # Deliver the actual WAV audio as a binary frame.
-                    await enqueue_message(audio_bytes)
+                    if not meta_sent:
+                        logger.warning(
+                            "Failed to deliver safety_warning metadata to client."
+                        )
+                        continue
+
+                    # Deliver the actual WAV audio as a binary frame and wait for delivery.
+                    binary_sent = await enqueue_message(
+                        audio_bytes,
+                        wait_until_sent=True,
+                    )
+
+                    if not binary_sent:
+                        logger.warning(
+                            "Failed to deliver safety_warning binary audio to client."
+                        )
+                        continue
 
                     warning_already_sent = True
 

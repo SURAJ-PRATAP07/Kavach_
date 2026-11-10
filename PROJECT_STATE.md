@@ -209,20 +209,23 @@ Automated verification on 2026-11-10:
 
 Integrated scam detection, warning policy, session-scoped consent and Gnani Timbre TTS into the WebSocket streaming pipeline (`backend/app/streaming.py`).
 
-Implemented behaviour:
+Implemented behaviour and hardened delivery lifecycle:
 - Evaluates the explainable warning policy (`evaluate_warning_policy`) against cumulative evidence after every transcript segment.
 - Transmits an explainable `warning_decision` payload on every WebSocket transcript event (`level`, `should_speak`, `reason_codes`, `matched_rule_ids`, `distinct_stages`).
-- Automatic trigger condition: Triggers speech synthesis if and only if `decision.should_speak` is `True` (policy level is `WARNING`, session consent is granted, and no warning has previously been sent in this session).
-- Synthesis execution: Offloads synchronous `synthesize_digital_arrest_warning` to the Starlette thread pool via `run_in_threadpool` without blocking the asynchronous event loop.
-- Two-part delivery:
-  1. JSON metadata message (`type: "safety_warning"`, `level: "warning"`, `audio_format: "wav"`, `audio_bytes`, `audio_duration_seconds`, reason codes, matched rules, distinct stages).
-  2. Binary frame containing the complete WAV audio payload.
-- Session isolation & deduplication: `warning_already_sent` flag prevents duplicate warnings within the same connection.
-- Resilient error handling: Server missing API key or `TTSServiceError` yields a `warning_synthesis_error` event without crashing the streaming session or terminating the WebSocket connection.
+- Automatic trigger condition: Triggers speech synthesis if and only if `decision.should_speak` is `True` (policy level is `WARNING`, session consent is granted, and no warning has previously been attempted or sent in this session).
+- Session warning lifecycle states:
+  - `warning_attempted`: session boolean flag set before initiating TTS synthesis to enforce a strict maximum of one automatic synthesis attempt per WebSocket session (preventing unbounded synthesis retries on subsequent qualifying transcripts upon failure).
+  - `warning_in_progress`: active operation guard protecting the synthesis and transmission block.
+  - `warning_already_sent`: marked `True` only after both metadata and binary audio frames have been successfully acknowledged by the WebSocket writer.
+- Strict WAV format validation: Before delivery, audio bytes are checked for non-empty bytes, valid WAV container, 16,000 Hz sample rate, 1 mono channel, 2-byte sample width, uncompressed PCM format, and positive frame count. Any validation failure emits a `warning_synthesis_error` and aborts delivery.
+- Two-part delivery with acknowledgement:
+  1. JSON metadata message (`type: "safety_warning"`, `level: "warning"`, `audio_format: "wav"`, `audio_bytes`, `audio_duration_seconds`, reason codes, matched rules, distinct stages) sent with `wait_until_sent=True`.
+  2. Binary frame containing the complete WAV audio payload sent with `wait_until_sent=True`.
+- Resilient error handling: Server missing API key, `TTSServiceError`, or format validation error yields a `warning_synthesis_error` event without crashing the streaming session or terminating ongoing transcription.
 
 Automated verification on 2026-11-10:
-- WebSocket streaming tests: 28 passed (including 6 new Stage 4.4 integration tests).
-- Complete backend suite: 106 passed, 0 failed, 1 non-failing warning.
+- WebSocket streaming tests: 38 passed (including 16 Stage 4.4 integration and lifecycle tests).
+- Complete backend suite: 116 passed, 0 failed, 1 non-failing warning.
 - Python compilation: passed.
 - `git diff --check`: passed.
 
@@ -234,15 +237,15 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection, consent and warning triggering | 28 |
+| WebSocket streaming, lifecycle, detection, consent and warning triggering | 38 |
 | TTS | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **106** |
+| **Total** | **116** |
 
-Result: **106 passed, 0 failed, 1 non-failing warning.**
+Result: **116 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
 
@@ -279,7 +282,7 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Tested for OTP (4.021s at 0.85) and digital-arrest (25.303s at 0.95); confirmed clear and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 106 passing, 1 non-failing warning |
+| Automated backend tests | 116 passing, 1 non-failing warning |
 | Automatic warning triggering | Implemented and automated-test verified (WebSocket metadata + binary WAV) |
 
 ## Pending Components

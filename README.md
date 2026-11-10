@@ -26,8 +26,8 @@ Currently implemented and verified:
 - `ConversationDetectionAccumulator`: connection-scoped cumulative phrase-based evidence aggregation across WebSocket transcript events.
 - Explainable warning policy (`evaluate_warning_policy`): deterministic heuristic evaluation with distinct-stage thresholds (MONITOR, ADVISORY, WARNING), consent gating, and repeat-warning suppression.
 - Backend WebSocket consent protocol for automatic spoken safety warnings, with strict Boolean validation, grant/revoke acknowledgements and session reset on reconnect.
-- Automated warning triggering pipeline: evaluates warning policy against cumulative evidence on every transcript event, synthesizes digital-arrest warning audio via Gnani Timbre upon reaching `WARNING` level with granted consent, and delivers JSON `safety_warning` metadata followed by binary WAV audio frames.
-- Automated backend tests: **106 passed, 0 failed, 1 non-failing deprecation warning**.
+- Automated warning triggering pipeline: evaluates warning policy against cumulative evidence on every transcript event, synthesizes digital-arrest warning audio via Gnani Timbre upon reaching `WARNING` level with granted consent, validates WAV audio parameters, enforces a bounded single-attempt retry policy, and delivers JSON `safety_warning` metadata followed by binary WAV audio frames with transmission acknowledgement.
+- Automated backend tests: **116 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 

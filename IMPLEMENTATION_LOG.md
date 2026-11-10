@@ -886,7 +886,7 @@ Stage 4.3 implementation, tests and documentation were reviewed and committed in
 
 ### Objective
 
-Integrate the scam detection engine, warning policy, session-scoped consent protocol, and Gnani Timbre TTS service into the live WebSocket streaming pipeline (`/ws/transcribe`) to achieve automatic, consent-governed warning audio triggering.
+Integrate the scam detection engine, warning policy, session-scoped consent protocol, and Gnani Timbre TTS service into the live WebSocket streaming pipeline (`/ws/transcribe`) to achieve automatic, consent-governed warning audio triggering, with hardened delivery acknowledgement, bounded retry enforcement, and strict WAV format validation.
 
 ### Implementation
 
@@ -894,34 +894,49 @@ Updated:
 - `backend/app/streaming.py`
 - `backend/tests/test_streaming.py`
 
-Key components implemented:
+Key components implemented and hardened:
 1. **Warning policy evaluation per transcript event**:
    - `forward_provider_events()` evaluates `evaluate_warning_policy` against cumulative evidence from `ConversationDetectionAccumulator`.
    - Attaches `warning_decision` dictionary (`level`, `should_speak`, `reason_codes`, `matched_rule_ids`, `distinct_stages`) to every outgoing `transcript` event.
 2. **Consent-governed automatic speech triggering**:
-   - Checks `decision.should_speak` (requires `WARNING` level, session consent granted, and no prior warning sent).
+   - Checks `decision.should_speak` (requires `WARNING` level, session consent granted, and no prior warning attempted or sent).
    - Offloads `synthesize_digital_arrest_warning` to the Starlette thread pool (`run_in_threadpool`) using the configured `gnani_api_key`.
-3. **Two-phase delivery over WebSocket**:
-   - Sends `safety_warning` JSON message with audio metadata (`level`, `distinct_stages`, `audio_format`, `audio_bytes`, `audio_duration_seconds`).
-   - Dispatches the complete WAV payload as a binary frame to the client.
-4. **Session deduplication & concurrency safety**:
-   - `warning_already_sent` session boolean flag ensures warnings are triggered at most once per connection.
-   - `warning_in_progress` guard prevents re-entrant synthesis during in-flight operations.
-5. **Resilient failure isolation**:
-   - Catches `TTSServiceError` or missing API keys and emits `warning_synthesis_error` JSON events without dropping the WebSocket connection or stopping transcription.
+3. **Session warning lifecycle states**:
+   - `warning_attempted`: Flagged before initiating TTS synthesis to enforce at most one synthesis attempt per WebSocket session (bounded retry policy prevents repeated attempts on subsequent transcripts upon TTS or format error).
+   - `warning_in_progress`: In-flight concurrency lock preventing re-entrant execution.
+   - `warning_already_sent`: Marked `True` only after both the JSON metadata and binary audio frame are confirmed transmitted.
+4. **Strict WAV format validation (`validate_synthesized_wav`)**:
+   - Validates that synthesized audio is non-empty bytes, container opens as WAV, channels equal 1 (mono), sample rate equals 16,000 Hz, sample width equals 2 bytes, compression is uncompressed PCM, and frame count is positive.
+   - Rejects corrupted or misconfigured audio before metadata or binary delivery, emitting a `warning_synthesis_error`.
+5. **Two-phase delivery with WebSocket acknowledgement**:
+   - Sends `safety_warning` JSON message with audio metadata (`level`, `distinct_stages`, `audio_format`, `audio_bytes`, `audio_duration_seconds`) with `wait_until_sent=True`.
+   - Dispatches the complete WAV payload as a binary frame with `wait_until_sent=True`.
+   - Checks return values from `enqueue_message()` so transmission failures do not mark `warning_already_sent = True`.
+6. **Resilient failure isolation**:
+   - Catches `TTSServiceError`, format errors, or missing API keys and emits `warning_synthesis_error` JSON events without dropping the WebSocket connection or stopping transcription.
 
 ### Automated tests
 
-Added 6 integration tests in `backend/tests/test_streaming.py`:
+Added 16 integration and validation tests in `backend/tests/test_streaming.py`:
 1. `test_transcript_includes_warning_decision`: Verifies explainable `warning_decision` structure in transcript events.
 2. `test_automatic_warning_triggered_when_consent_granted`: Verifies end-to-end synthesis invocation, `safety_warning` JSON metadata, and binary WAV frame delivery.
 3. `test_warning_not_triggered_without_consent`: Verifies no synthesis or audio occurs when policy escalates to `WARNING` but consent remains default `False`.
 4. `test_duplicate_warning_suppression_in_same_session`: Verifies repeat warning suppression when subsequent coercive scam phrases arrive.
 5. `test_warning_synthesis_failure_handled_gracefully`: Verifies `warning_synthesis_error` emission without session termination when TTS fails.
-6. `test_session_isolation_for_warning_trigger`: Verifies two concurrent/sequential WebSocket connections maintain independent consent and warning states.
+6. `test_session_isolation_for_warning_trigger`: Verifies two sequential WebSocket connections maintain independent consent and warning states.
+7. `test_warning_delivery_acknowledgement_marks_sent_on_success`: Verifies delivery acknowledgement lifecycle.
+8. `test_warning_tts_failure_does_not_retry_on_later_transcripts`: Verifies bounded retry enforcement after synthesis failure.
+9. `test_invalid_wav_bytes_rejected_before_delivery`: Verifies rejection of corrupted/non-WAV data.
+10. `test_empty_wav_payload_rejected`: Verifies rejection of 0-byte payload.
+11. `test_incorrect_sample_rate_rejected`: Verifies rejection of non-16kHz sample rate.
+12. `test_incorrect_channel_count_rejected`: Verifies rejection of stereo/multichannel audio.
+13. `test_incorrect_sample_width_rejected`: Verifies rejection of 8-bit sample width.
+14. `test_metadata_transmission_failure_prevents_warning_marked_sent`: Verifies transmission failure does not mark warning sent.
+15. `test_validate_synthesized_wav_helper_direct`: Direct unit test for all format validation constraints.
+16. `test_transcription_continues_after_tts_error`: Verifies transcription continues uninterrupted after TTS failure.
 
-Total streaming tests: 28 passed. Complete backend suite: 106 passed.
+Total streaming tests: 38 passed. Complete backend suite: 116 passed.
 
 ### Scope and limitations
 
-Stage 4.4 delivers the backend automated triggering and binary streaming. Frontend audio rendering/controls and playback cancellation/revocation handling (Stage 4.5) remain pending.
+Stage 4.4 delivers server-side transmission acknowledgement, bounded retries, format validation, and binary streaming. Client-side playback acknowledgement and playback cancellation/revocation handling (Stage 4.5) remain pending.

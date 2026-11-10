@@ -200,15 +200,23 @@ The client can send a `warning_consent` command with a strict Boolean `granted` 
 
 Consent resets when the WebSocket connection ends. This protocol controls consent for automatic spoken safety warnings only. It does not represent consent for audio capture, transcription or analysis.
 
-#### Automated warning triggering and binary audio delivery
+#### Automated warning triggering, lifecycle states, and binary audio delivery
 
 When cumulative evidence triggers an escalation to `WARNING` and `warning_consent_enabled` is `True`, the WebSocket pipeline automatically invokes `synthesize_digital_arrest_warning` using `run_in_threadpool`.
 
-Delivery occurs in two parts:
-1. `safety_warning` JSON message containing decision metadata, rule IDs, audio duration, and byte length.
-2. Binary frame containing the raw 16 kHz mono 16-bit linear PCM standard WAV audio.
+Warning delivery lifecycle maintains three distinct session states:
+- `warning_attempted`: boolean flag set immediately before initiating synthesis, enforcing a bounded retry policy of at most one synthesis attempt per WebSocket session (preventing repeated synthesis on subsequent qualifying segments if TTS or delivery fails).
+- `warning_in_progress`: active concurrency guard ensuring synthesis and transmission do not execute concurrently.
+- `warning_already_sent`: marked `True` only after both the JSON metadata and binary audio frame are confirmed delivered by the single-writer queue.
 
-Deduplication logic (`warning_already_sent`) ensures at most one automatic spoken warning is synthesized and delivered per WebSocket connection. Errors during synthesis emit a `warning_synthesis_error` event without closing or disrupting the ongoing transcription session.
+WAV validation:
+Before delivery, synthesized bytes are strictly validated against required parameters: non-empty payload, valid WAV header, 16,000 Hz sample rate, 1 mono channel, 2-byte sample width, uncompressed PCM format, and positive frame count. Any validation failure emits a `warning_synthesis_error` event and aborts delivery.
+
+Delivery occurs in two sequentially acknowledged steps:
+1. `safety_warning` JSON message containing decision metadata, rule IDs, audio duration, and byte length sent with `wait_until_sent=True`.
+2. Binary frame containing the raw 16 kHz mono 16-bit linear PCM standard WAV audio sent with `wait_until_sent=True`.
+
+This guarantees server-side transmission acknowledgement; actual client playback orchestration and playback cancellation/revocation remain pending frontend and Stage 4.5 milestones. Errors during synthesis or validation emit a safe `warning_synthesis_error` without disrupting ongoing transcription.
 
 ### 4.5 Standalone Gnani Timbre Text-to-Speech Endpoints
 
