@@ -8,7 +8,7 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2 + Detection Integrations + Stages 3, 4.1 & 4.2: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, conversation-level evidence aggregation, explainable warning policy, and session-scoped warning consent protocol.**
+**Milestones 0–4.2 + Detection Integrations + Stages 3, 4.1, 4.2 & 4.3: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, conversation-level evidence aggregation, explainable warning policy, session-scoped warning consent protocol, and digital-arrest warning synthesis.**
 
 Currently implemented and verified:
 
@@ -18,7 +18,7 @@ Currently implemented and verified:
 - Hindi transcription configuration (`hi-IN`).
 - Audio upload validation and application-level 10 MB upload limit.
 - Provider error and timeout handling.
-- Standalone Gnani Timbre v3.0 safety-warning TTS endpoint (`POST /synthesize-warning`), live-verified with two romanized Hindi warning segments.
+- Standalone Gnani Timbre v3.0 safety-warning TTS endpoints: `POST /synthesize-warning` (OTP warning, speed 0.85) and `POST /synthesize-digital-arrest-warning` (general-purpose digital-arrest warning, speed 0.95), live-verified.
 - Detection data schemas for transcript segments, scam stages, evidence and stage assessments.
 - Initial phrase-based detection for impersonation, threats, isolation and financial extraction.
 - Selected English, romanized Hindi/Hinglish and Devanagari phrase patterns.
@@ -26,7 +26,7 @@ Currently implemented and verified:
 - `ConversationDetectionAccumulator`: connection-scoped cumulative phrase-based evidence aggregation across WebSocket transcript events.
 - Explainable warning policy (`evaluate_warning_policy`): deterministic heuristic evaluation with distinct-stage thresholds (MONITOR, ADVISORY, WARNING), consent gating, and repeat-warning suppression.
 - Backend WebSocket consent protocol for automatic spoken safety warnings, with strict Boolean validation, grant/revoke acknowledgements and session reset on reconnect.
-- Automated backend tests: **95 passed, 0 failed, 1 non-failing deprecation warning**.
+- Automated backend tests: **100 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
@@ -249,7 +249,11 @@ The endpoint returns the transcription and available provider metadata.
 
 ### `POST /synthesize-warning`
 
-Synthesizes the currently configured standalone Hindi safety warning using Gnani Timbre. The response is WAV audio (`audio/wav`). This endpoint is not yet automatically triggered by scam detection.
+Synthesizes the currently configured standalone Hindi safety warning for OTP protection using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.85`). The response is WAV audio (`audio/wav`). This endpoint is not yet automatically triggered by scam detection.
+
+### `POST /synthesize-digital-arrest-warning`
+
+Synthesizes the general-purpose Hindi digital-arrest safety warning using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.95`). The warning consists of four guidance sentences advising victims not to panic, never to transfer funds or share credentials, to disconnect and independently verify through official portals, and to consult trusted family members. The response is standard WAV audio (`audio/wav`). This endpoint operates as a standalone service and is not yet automatically triggered by scam detection.
 
 ### `WS /ws/transcribe`
 
@@ -305,13 +309,13 @@ The frontend consent UI and automatic warning/TTS integration are not yet implem
 
 Latest complete backend verification on 2026-11-10:
 
-- 95 tests passed.
+- 100 tests passed.
 - 0 tests failed.
 - 1 non-failing deprecation warning.
 
-The WebSocket test group contains 22 tests covering streaming, lifecycle handling, per-event detection, cumulative conversation evidence and session-scoped warning consent.
+The test suite covers REST and WebSocket transcription, 22 WebSocket streaming and consent tests, 13 TTS service and endpoint tests, phrase-based detection, cumulative evidence aggregation, and the explainable warning policy.
 
-Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis.
+Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis for both OTP and digital-arrest warnings.
 
 These results do not establish real-world transcription or scam-detection accuracy.
 
@@ -325,7 +329,7 @@ The project maintains:
 - ARCHITECTURE.md — System architecture and design decisions.
 - IMPLEMENTATION_LOG.md — Development history.
 
-The 95 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 100 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -357,7 +361,7 @@ The 95 passing automated backend tests do not establish real-world scam detectio
 - [ ] Contextual scam-stage detection and improved negation/context handling.
 - [ ] Evaluation against labelled legitimate and scam conversations.
 - [ ] Warning-policy integration with WebSocket streaming.
-- [x] Standalone Gnani Timbre TTS endpoint (live-verified).
+- [x] Standalone Gnani Timbre TTS endpoints for OTP and digital-arrest warnings (live-verified).
 - [ ] Automatic warning triggering and TTS audio delivery.
 - [ ] Frontend dashboard and consent workflow.
 - [ ] Trusted-family notifications.

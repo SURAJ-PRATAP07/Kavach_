@@ -29,7 +29,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 
 ## 3. High-Level Architecture
 
-The current backend provides REST and WebSocket transcription, phrase-based detection, cumulative WebSocket evidence aggregation, a standalone warning policy, session-scoped warning consent and a standalone Gnani Timbre TTS endpoint.
+The current backend provides REST and WebSocket transcription, phrase-based detection, cumulative WebSocket evidence aggregation, a standalone warning policy, session-scoped warning consent and standalone Gnani Timbre TTS endpoints.
 
 ```mermaid
 flowchart TD
@@ -51,15 +51,17 @@ flowchart TD
     L -. Pending audio orchestration .-> M[Gnani Timbre TTS]
     M --> N[WAV audio response]
 
-    O[Standalone client request] --> P[POST /synthesize-warning]
-    P --> M
+    O[Standalone client request] --> P1[POST /synthesize-warning]
+    O --> P2[POST /synthesize-digital-arrest-warning]
+    P1 --> M
+    P2 --> M
 ```
 
 REST transcription invokes phrase-based detection and includes its structured result in the response.
 
 WebSocket transcript events receive independent detection results and cumulative `conversation_detection` results. The WebSocket session also maintains a separate consent flag for automatic spoken safety warnings.
 
-The warning policy, consent protocol and TTS service exist as separate components. Their end-to-end integration and automatic audio delivery are not yet implemented.
+The warning policy, consent protocol and TTS endpoints exist as separate components. Their end-to-end integration and automatic audio delivery are not yet implemented.
 
 Contextual reasoning, calibrated numerical risk scoring and trusted-family notifications remain planned.
 
@@ -200,66 +202,68 @@ Consent resets when the WebSocket connection ends. This protocol controls consen
 
 The consent state is not yet connected to the warning policy or TTS playback.
 
-### 4.5 Standalone Gnani Timbre Text-to-Speech
+### 4.5 Standalone Gnani Timbre Text-to-Speech Endpoints
 
 Service file:
 
 `backend/app/tts.py`
 
-Endpoint:
+Endpoints:
 
-`POST /synthesize-warning`
+- `POST /synthesize-warning`: OTP-specific warning.
+- `POST /synthesize-digital-arrest-warning`: General-purpose Hindi digital-arrest warning.
 
 Purpose:
 
-Generate Kavach's fixed Hindi safety warning as a WAV audio response. This endpoint currently operates independently of the detection workflow.
+Generate fixed Hindi voice safety warnings as standard WAV audio responses. Both endpoints operate as standalone services independent of the real-time detection and streaming workflows.
 
 Synthesis configuration:
 
-| Parameter | Value |
-|---|---|
-| Provider | Gnani Timbre |
-| Model | `timbre-v3.0` |
-| Voice | `Tarika` |
-| Language | `hi-IN` |
-| Speed | 0.85 |
-| Sample rate | 16,000 Hz |
-| Channels | Mono |
-| Sample format | 16-bit linear PCM |
-| Output container | WAV |
-| Silence between segments | 350 milliseconds |
+| Parameter | OTP Warning | Digital-Arrest Warning |
+|---|---|---|
+| Provider | Gnani Timbre | Gnani Timbre |
+| Model | `timbre-v3.0` | `timbre-v3.0` |
+| Voice | `Tarika` | `Tarika` |
+| Language | `hi-IN` | `hi-IN` |
+| Speaking speed | `0.85` | `0.95` |
+| Sample rate | 16,000 Hz | 16,000 Hz |
+| Channels | Mono | Mono |
+| Sample format | 16-bit linear PCM | 16-bit linear PCM |
+| Output container | WAV | WAV |
+| Silence between segments | 350 milliseconds | 350 milliseconds |
 
-Warning segments:
+Warning content:
 
-1. `Apna one-time password.`
-2. `Kisi ke saath share na karein.`
+1. **OTP-specific warning** (`WARNING_SEGMENTS`):
+   - `Apna one-time password.`
+   - `Kisi ke saath share na karein.`
 
-Processing flow:
+2. **Digital-arrest warning** (`DIGITAL_ARREST_WARNING_SEGMENTS`):
+   - `Agar koi vyakti police, CBI ya kisi sarkari adhikari ke naam par aapko dhamka raha hai, toh ghabraiye nahi.`
+   - `Paise kisi bhi account mein transfer na karein, aur OTP ya bank details share na karein.`
+   - `Call band karein aur sambandhit agency ka number khud uski official website se lekar jaanch karein.`
+   - `Kisi bharosemand parivaar ke sadasya se baat karein.`
 
-1. FastAPI checks that the Gnani API key is configured.
-2. The endpoint invokes `synthesize_warning()` through `run_in_threadpool`.
-3. The TTS service creates a Gnani TTS client.
-4. The synchronous SDK synthesizes the two warning segments separately.
-5. The service validates the returned WAV audio format and extracts PCM data.
-6. The service inserts 350 milliseconds of silence between the segments.
-7. The PCM data is assembled into a standard WAV file.
-8. FastAPI returns the audio with content type `audio/wav` and `Cache-Control: no-store`.
+Shared implementation:
 
-The thread-pool execution prevents the synchronous SDK request from directly blocking the asynchronous FastAPI event loop.
-
-Error handling covers missing API configuration, malformed provider audio and synthesis failures. Provider-specific exception details are not exposed to the client.
+Both endpoints invoke the shared internal helper `_synthesize_segments(api_key, warning_segments, speed)`:
+1. Validates API key and warning segments.
+2. Initializes `GnaniTTSClient` with a 60-second timeout.
+3. Synthesizes each text segment sequentially with the specified speaking speed and audio config.
+4. Validates each returned WAV header via `_extract_pcm()` and extracts PCM bytes.
+5. Inserts 350 ms of silence (5,600 zero-value samples) between consecutive segments.
+6. Rebuilds a standard, compliant WAV container via `_build_wav()`.
+7. FastAPI endpoints execute the synchronous SDK calls using `run_in_threadpool`.
 
 Verification:
-- Five TTS service tests passed.
-- Three TTS endpoint tests passed.
-- Live endpoint returned HTTP 200 with content type `audio/wav`.
-- Live WAV contained 64,330 frames at 16 kHz.
-- Duration calculation: 64,330 / 16,000 = 4.020625 seconds.
-- The user confirmed that the tested playback was complete and understandable.
+- Automated tests: 13 passed in `backend/tests/test_tts.py` (5 service tests, 3 OTP endpoint tests, 5 digital-arrest tests).
+- OTP live verification: HTTP 200, 64,330 frames at 16 kHz (4.021 seconds), confirmed complete and understandable.
+- Digital-arrest live verification:
+  - Baseline at speed 0.85: 455,012 frames (28.438 seconds).
+  - Optimized at speed 0.95: 404,843 frames (25.303 seconds, 809,730 bytes).
+  - User confirmed that the 0.95 playback was clear, natural, and complete.
 
-Verification scope is limited to these two romanized Hindi warning segments and the tested voice/settings. Devanagari quality, broader Hindi/Hinglish quality and other warning phrases have not been evaluated.
-
-**Integration boundary:** TTS is implemented as a standalone service and endpoint. Automatic warning triggering from the WebSocket or scam-detection workflow remains planned.
+**Integration boundary:** Both TTS endpoints operate as standalone HTTP endpoints. Automatic detection-to-warning triggering, audio streaming through WebSockets, and playback revocation/cancellation handling remain planned.
 
 ### 4.6 Scam-detection data schemas
 
@@ -477,7 +481,7 @@ The future warning workflow will:
 - Cumulative conversation-level evidence aggregation within each WebSocket connection.
 - Independent explainable warning policy (`evaluate_warning_policy`).
 - Session-scoped WebSocket consent protocol for automatic spoken safety warnings.
-- Standalone Gnani Timbre warning synthesis endpoint.
+- Standalone Gnani Timbre warning synthesis endpoints (`POST /synthesize-warning` and `POST /synthesize-digital-arrest-warning`).
 
 **Remaining integration work:**
 
@@ -524,21 +528,21 @@ Latest complete automated verification on 2026-11-10:
 | Health endpoint | 1 |
 | REST transcription | 10 |
 | WebSocket streaming, lifecycle, detection and consent | 22 |
-| TTS service and endpoint | 8 |
+| TTS service and endpoint | 13 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **95** |
+| **Total** | **100** |
 
-Result: **95 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Result: **100 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
 The WebSocket suite includes detection-integration tests, cumulative conversation evidence tests and consent grant/revoke, invalid-value rejection and reconnect reset tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 
 Additional live integration checks:
 - REST transcription: one successful live Hindi request.
 - WebSocket streaming: one live Hindi recording.
-- TTS: one live endpoint request with playback confirmed complete and understandable.
+- TTS endpoints: live requests verified with playback confirmed complete and understandable for both OTP warning (4.021s at speed 0.85) and digital-arrest warning (25.303s at speed 0.95).
 
 Live WebSocket detection has not yet been evaluated against a real labelled scam conversation. The current automated tests verify the detection integration using mocked transcript events.
 

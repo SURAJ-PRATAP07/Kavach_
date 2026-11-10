@@ -13,6 +13,7 @@ TTS_MODEL = "timbre-v3.0"
 TTS_VOICE = "Tarika"
 TTS_LANGUAGE = "hi-IN"
 TTS_SPEED = 0.85
+DIGITAL_ARREST_TTS_SPEED = 0.95
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -22,6 +23,13 @@ PAUSE_SECONDS = 0.350
 WARNING_SEGMENTS = (
     "Apna one-time password.",
     "Kisi ke saath share na karein.",
+)
+
+DIGITAL_ARREST_WARNING_SEGMENTS = (
+    "Agar koi vyakti police, CBI ya kisi sarkari adhikari ke naam par aapko dhamka raha hai, toh ghabraiye nahi.",
+    "Paise kisi bhi account mein transfer na karein, aur OTP ya bank details share na karein.",
+    "Call band karein aur sambandhit agency ka number khud uski official website se lekar jaanch karein.",
+    "Kisi bharosemand parivaar ke sadasya se baat karein.",
 )
 
 
@@ -100,15 +108,19 @@ def _build_wav(pcm: bytes) -> bytes:
     return output.getvalue()
 
 
-def synthesize_warning(api_key: str) -> bytes:
-    """
-    Generate the fixed Kavach warning using sentence-level synthesis.
 
-    Returns a complete WAV file as bytes.
-    """
+def _synthesize_segments(
+    api_key: str,
+    warning_segments: tuple[str, ...],
+    speed: float,
+) -> bytes:
+    """Synthesize multiple warning segments and combine them into WAV."""
 
     if not api_key or not api_key.strip():
         raise TTSServiceError("TTS is not configured on the server.")
+
+    if not warning_segments:
+        raise TTSServiceError("No warning segments were provided.")
 
     try:
         client = GnaniTTSClient(
@@ -130,14 +142,14 @@ def synthesize_warning(api_key: str) -> bytes:
 
     pcm_segments = []
 
-    for index, text in enumerate(WARNING_SEGMENTS, start=1):
+    for index, text in enumerate(warning_segments, start=1):
         try:
             audio = client.synthesize(
                 text=text,
                 voice=TTS_VOICE,
                 model=TTS_MODEL,
                 language=TTS_LANGUAGE,
-                speed=TTS_SPEED,
+                speed=speed,
                 audio_config=audio_config,
             )
         except Exception as exc:
@@ -148,12 +160,30 @@ def synthesize_warning(api_key: str) -> bytes:
         pcm_segments.append(_extract_pcm(audio))
 
     silence_samples = round(SAMPLE_RATE * PAUSE_SECONDS)
-    silence = b"\x00" * (silence_samples * CHANNELS * SAMPLE_WIDTH)
-
-    combined_pcm = (
-        pcm_segments[0]
-        + silence
-        + pcm_segments[1]
+    silence = b"\x00" * (
+        silence_samples * CHANNELS * SAMPLE_WIDTH
     )
 
+    combined_pcm = silence.join(pcm_segments)
+
     return _build_wav(combined_pcm)
+
+
+def synthesize_warning(api_key: str) -> bytes:
+    """Generate the existing OTP-specific warning."""
+
+    return _synthesize_segments(
+        api_key,
+        WARNING_SEGMENTS,
+        TTS_SPEED,
+    )
+
+
+def synthesize_digital_arrest_warning(api_key: str) -> bytes:
+    """Generate the general-purpose Hindi digital-arrest safety warning."""
+
+    return _synthesize_segments(
+        api_key,
+        DIGITAL_ARREST_WARNING_SEGMENTS,
+        DIGITAL_ARREST_TTS_SPEED,
+    )

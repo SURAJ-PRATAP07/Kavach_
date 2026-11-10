@@ -8,8 +8,11 @@ from app.config import Settings, get_settings
 from app.detection.engine import detect_segments
 from app.detection.schemas import TranscriptSegment
 from app.streaming import router as streaming_router
-from app.tts import TTSServiceError, synthesize_warning
-
+from app.tts import (
+    TTSServiceError,
+    synthesize_warning,
+    synthesize_digital_arrest_warning,
+)
 app = FastAPI(
     title="Kavach API",
     description="Consent-based voice safety companion prototype.",
@@ -215,6 +218,41 @@ async def synthesize_safety_warning(
         media_type="audio/wav",
         headers={
             "Content-Disposition": 'inline; filename="kavach-warning.wav"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.post("/synthesize-digital-arrest-warning", tags=["speech"])
+async def synthesize_digital_arrest_safety_warning(
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Generate a general Hindi digital-arrest safety warning as WAV."""
+
+    if not settings.gnani_api_key.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Speech synthesis is not configured on the server.",
+        )
+
+    try:
+        audio_bytes = await run_in_threadpool(
+            synthesize_digital_arrest_warning,
+            settings.gnani_api_key,
+        )
+    except TTSServiceError:
+        raise HTTPException(
+            status_code=502,
+            detail="Gnani speech synthesis failed.",
+        ) from None
+
+    return Response(
+        content=audio_bytes,
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": (
+                'inline; filename="kavach-digital-arrest-warning.wav"'
+            ),
             "Cache-Control": "no-store",
         },
     )

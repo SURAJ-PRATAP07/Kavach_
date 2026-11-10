@@ -799,3 +799,99 @@ The consent state is not yet connected to warning-policy evaluation, automatic T
 The consent flag applies only to automatic spoken safety warnings. It does not establish consent for audio capture, transcription or analysis.
 
 No real-world scam-detection accuracy or warning effectiveness is established by these tests.
+
+
+---
+
+## Test Report — Stage 4.3 General-Purpose Hindi Digital-Arrest Warning Synthesis
+
+**Date:** 2026-11-10
+
+### Environment
+
+- Operating system: Windows
+- Python: 3.11.9 (and 3.13.5 in verification environment)
+- pytest: 8.4.2 / 9.2.0
+- Backend framework: FastAPI
+- Speech provider: Gnani Timbre v3.0
+
+### New and updated tests
+
+File: `backend/tests/test_tts.py`
+
+Digital-arrest warning coverage:
+
+| Test | Expected behaviour | Result |
+|---|---|---|
+| `test_digital_arrest_warning_returns_valid_wav` | Rebuilds standard WAV with 4 segments and 3 pauses (23,200 samples total) | PASS |
+| `test_digital_arrest_warning_uses_expected_gnani_settings` | Passes 4 segments to Timbre v3.0, voice `Tarika`, speed `0.95` | PASS |
+| `test_digital_arrest_warning_endpoint_returns_wav` | HTTP 200, `audio/wav`, inline attachment header, `Cache-Control: no-store` | PASS |
+| `test_digital_arrest_warning_endpoint_rejects_missing_api_key` | HTTP 503 when API key is empty | PASS |
+| `test_digital_arrest_warning_endpoint_handles_provider_failure` | HTTP 502 without leaking provider-internal exception details | PASS |
+
+Existing OTP warning tests (`test_synthesis_uses_expected_gnani_settings`, etc.) continue to verify speaking speed `0.85` and HTTP 200 response.
+
+### Targeted TTS test results
+
+| Metric | Result |
+|---|---:|
+| Passed | 13 |
+| Failed | 0 |
+| Warnings | 1 (non-failing Starlette deprecation) |
+| Duration | 1.05 seconds |
+
+### Complete backend test results
+
+| Test group | Passed |
+|---|---:|
+| Health endpoint | 1 |
+| REST transcription | 10 |
+| WebSocket streaming, lifecycle, detection and consent | 22 |
+| TTS | 13 |
+| Detection schemas | 8 |
+| Detection engine | 31 |
+| Conversation detection | 4 |
+| Warning policy | 11 |
+| **Total** | **100** |
+
+Result: **100 passed, 0 failed, 1 non-failing warning.**
+
+Complete suite duration: 9.35 seconds.
+
+### Live endpoint verification
+
+The live endpoint `POST /synthesize-digital-arrest-warning` was called through the local Kavach FastAPI backend with Gnani Timbre:
+
+| Parameter | Observed run 1 (speed 0.85) | Observed run 2 (speed 0.95) |
+|---|---|---|
+| Endpoint | `POST /synthesize-digital-arrest-warning` | `POST /synthesize-digital-arrest-warning` |
+| Provider model | `timbre-v3.0` | `timbre-v3.0` |
+| Voice | `Tarika` | `Tarika` |
+| Language | `hi-IN` | `hi-IN` |
+| Speaking speed | `0.85` | `0.95` |
+| HTTP status | 200 OK | 200 OK |
+| Content type | `audio/wav` | `audio/wav` |
+| WAV frames | 455,012 | 404,843 |
+| Sample rate | 16,000 Hz | 16,000 Hz |
+| Channels | 1 (Mono) | 1 (Mono) |
+| Bit depth | 16-bit PCM | 16-bit PCM |
+| Total duration | 28.438 seconds | 25.303 seconds |
+| Output file size | Not recorded | 809,730 bytes |
+| Playback assessment | Understandable, but slow | User-confirmed clear, natural, and complete |
+
+The 0.95 speaking speed achieved an ~11% reduction in duration (~3.135s faster) while maintaining high intelligibility and speech naturalness across all four guidance sentences.
+
+### Additional verification
+
+- `python -m compileall -q backend\app backend\tests`: passed.
+- `git diff --check`: passed (zero whitespace errors).
+
+### Warning
+
+One non-failing Starlette deprecation warning concerns using `httpx` with `starlette.testclient`. It does not cause test failures.
+
+### Limitations
+
+Both TTS endpoints operate as standalone HTTP services. They are not yet automatically triggered by the phrase-based scam detection engine, cumulative conversation detection, or the warning policy.
+
+Frontend audio playback orchestration, streaming audio transport, and playback revocation/cancellation remain pending.

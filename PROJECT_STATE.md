@@ -176,6 +176,35 @@ Automated verification on 2026-11-10:
 - Python compilation: passed.
 - `git diff --check`: passed (Git displayed an informational LF-to-CRLF notice).
 
+**Stage 4.3 — General-purpose Hindi digital-arrest warning synthesis: Implemented, automated-test verified and live-verified**
+
+Added `synthesize_digital_arrest_warning()` to `backend/app/tts.py` and `POST /synthesize-digital-arrest-warning` to `backend/app/main.py`.
+
+Implemented behaviour:
+- General-purpose Hindi safety warning specifically designed for digital-arrest scams, addressing impersonation, threats, financial extraction, and isolation.
+- Four romanized Hindi warning segments:
+  1. `Agar koi vyakti police, CBI ya kisi sarkari adhikari ke naam par aapko dhamka raha hai, toh ghabraiye nahi.`
+  2. `Paise kisi bhi account mein transfer na karein, aur OTP ya bank details share na karein.`
+  3. `Call band karein aur sambandhit agency ka number khud uski official website se lekar jaanch karein.`
+  4. `Kisi bharosemand parivaar ke sadasya se baat karein.`
+- Audio parameters: 16,000 Hz sample rate, mono channel, 16-bit linear PCM in standard WAV container, with 350 ms silence pauses between segments.
+- Refactored `_synthesize_segments()` helper in `backend/app/tts.py` to support per-warning speaking speeds:
+  - `POST /synthesize-warning`: OTP-specific warning, 2 segments, speaking speed `0.85` (duration ~4.021s).
+  - `POST /synthesize-digital-arrest-warning`: digital-arrest warning, 4 segments, speaking speed `0.95`.
+- Live endpoint verification:
+  - Initial run at speed `0.85`: 28.438 seconds (455,012 frames).
+  - Speed-adjusted run at `0.95`: 25.303 seconds (404,843 frames, 809,730 bytes).
+  - HTTP 200 returned with content type `audio/wav`, `Content-Disposition: inline; filename="kavach-digital-arrest-warning.wav"`, and `Cache-Control: no-store`.
+  - User playback evaluation confirmed that speech delivery at 0.95 was clear, natural, and complete across all four guidance sentences.
+
+**Integration boundary:** The digital-arrest warning endpoint is currently standalone. Automatic detection-to-warning orchestration, WebSocket audio streaming, frontend audio delivery, and playback cancellation/revocation handling remain pending.
+
+Automated verification on 2026-11-10:
+- TTS unit and endpoint tests: 13 passed (5 service tests, 3 OTP endpoint tests, 5 digital-arrest tests).
+- Complete backend suite: 100 passed, 0 failed, 1 non-failing warning.
+- Python compilation: passed.
+- `git diff --check`: passed.
+
 ## Current Test Status
 
 Latest complete backend verification on 2026-11-10:
@@ -185,14 +214,14 @@ Latest complete backend verification on 2026-11-10:
 | Health endpoint | 1 |
 | REST transcription | 10 |
 | WebSocket streaming, lifecycle, detection and consent | 22 |
-| TTS | 8 |
+| TTS | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **95** |
+| **Total** | **100** |
 
-Result: **95 passed, 0 failed, 1 non-failing warning.**
+Result: **100 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
 
@@ -214,8 +243,9 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Gnani Prisma REST transcription | Implemented and live-verified |
 | Gnani Prisma WebSocket streaming | Implemented and live-verified |
 | WebSocket failure and cleanup handling | Implemented and mock-tested |
-| Gnani Timbre standalone TTS service | Implemented and mock-tested |
-| `POST /synthesize-warning` | Implemented and live-verified |
+| Gnani Timbre standalone TTS service | Implemented and mock-tested (13 tests) |
+| `POST /synthesize-warning` | Implemented and live-verified (OTP warning, speed 0.85) |
+| `POST /synthesize-digital-arrest-warning` | Implemented and live-verified (digital-arrest warning, speed 0.95) |
 | Scam-detection data schemas | Implemented and tested (8 tests) |
 | Phrase-based scam detection engine | Implemented and tested (31 tests) |
 | REST transcription-to-detection integration | Implemented and automated-test verified |
@@ -226,9 +256,9 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Contextual and hybrid scam detection | Pending |
 | Calibrated explainable risk scoring | Pending |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
-| Safety-warning playback | Two tested segments confirmed complete and understandable |
+| Safety-warning playback | Tested for OTP (4.021s at 0.85) and digital-arrest (25.303s at 0.95); confirmed clear and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 95 passing, 1 non-failing warning |
+| Automated backend tests | 100 passing, 1 non-failing warning |
 
 ## Pending Components
 
@@ -261,13 +291,12 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 
 ## Immediate Next Steps
 
-1. Review and commit Stage 4.2 implementation, tests and documentation.
+1. Review and commit Stage 4.3 implementation, tests and documentation.
 2. Connect the warning policy to cumulative WebSocket detection.
 3. Define warning deduplication and session state behaviour.
-4. Implement general-purpose Hindi safety-warning content and verify it through Gnani Timbre.
-5. Integrate warning audio delivery with WebSocket streaming.
-6. Implement frontend consent controls and test grant/revoke behaviour end to end.
-7. Review backend security, validation and resource limits.
-8. Evaluate detection against labelled legitimate and scam conversations.
-9. Implement contextual reasoning and explainable risk scoring.
-10. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.
+4. Integrate warning audio delivery with WebSocket streaming.
+5. Implement frontend consent controls and test grant/revoke behaviour end to end.
+6. Review backend security, validation and resource limits.
+7. Evaluate detection against labelled legitimate and scam conversations.
+8. Implement contextual reasoning and explainable risk scoring.
+9. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.

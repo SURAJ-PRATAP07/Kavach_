@@ -803,4 +803,75 @@ Frontend consent controls, automatic warning triggering, audio delivery and play
 
 ### Git status
 
-Stage 4.2 code, tests and documentation are awaiting final review and commit/push.
+Stage 4.2 was committed and pushed in commit 2addcf0. Stage 4.3 implementation, tests and documentation are awaiting final review and commit/push.
+
+
+---
+
+## Stage 4.3 — General-purpose Hindi digital-arrest warning synthesis
+
+**Status:** Implemented, automated-test verified and live-verified.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Implement and live-verify general-purpose Hindi safety-warning speech generation specifically tailored for digital-arrest scams, replacing OTP-only warnings for arrest threats.
+
+### Implementation
+
+Updated:
+- `backend/app/tts.py`
+- `backend/app/main.py`
+- `backend/tests/test_tts.py`
+
+Implemented:
+
+- Defined `DIGITAL_ARREST_WARNING_SEGMENTS` with four guidance sentences in romanized Hindi:
+  1. `Agar koi vyakti police, CBI ya kisi sarkari adhikari ke naam par aapko dhamka raha hai, toh ghabraiye nahi.`
+  2. `Paise kisi bhi account mein transfer na karein, aur OTP ya bank details share na karein.`
+  3. `Call band karein aur sambandhit agency ka number khud uski official website se lekar jaanch karein.`
+  4. `Kisi bharosemand parivaar ke sadasya se baat karein.`
+- Configured dedicated speaking speeds per warning type:
+  - `TTS_SPEED = 0.85` for OTP-specific warnings.
+  - `DIGITAL_ARREST_TTS_SPEED = 0.95` for digital-arrest warnings to ensure natural pacing across longer sentences.
+- Refactored `_synthesize_segments(api_key, warning_segments, speed)` to accept a dynamic speaking speed while reusing common PCM validation and 350 ms pause construction.
+- Added public service function `synthesize_digital_arrest_warning(api_key)`.
+- Added REST endpoint `POST /synthesize-digital-arrest-warning` to `backend/app/main.py` with asynchronous thread-pool execution via `run_in_threadpool`.
+
+### Automated tests
+
+Added 5 automated tests in `backend/tests/test_tts.py`:
+
+1. `test_digital_arrest_warning_returns_valid_wav` — validates WAV header, channels, sample rate, and total sample count (23,200 samples across 4 fake segments and 3 pauses).
+2. `test_digital_arrest_warning_uses_expected_gnani_settings` — verifies model `timbre-v3.0`, voice `Tarika`, language `hi-IN`, speed `0.95`, and 4 sequential segment calls.
+3. `test_digital_arrest_warning_endpoint_returns_wav` — validates HTTP 200, WAV content type, inline attachment header, and `Cache-Control: no-store`.
+4. `test_digital_arrest_warning_endpoint_rejects_missing_api_key` — validates HTTP 503 response.
+5. `test_digital_arrest_warning_endpoint_handles_provider_failure` — validates HTTP 502 response without leaking internal provider details.
+
+Also verified that existing OTP tests continue to enforce speed `0.85`. Total TTS tests: 13 passed.
+
+### Live endpoint verification
+
+Generated real WAV audio via `POST /synthesize-digital-arrest-warning` with Gnani Timbre:
+
+- Initial baseline at speed `0.85`: 28.438 seconds (455,012 frames).
+- Tuned run at speed `0.95`: 25.303 seconds (404,843 frames, 809,730 bytes).
+- Format: 16 kHz, mono, 16-bit linear PCM in standard WAV.
+- HTTP status: 200 OK, `Content-Disposition: inline; filename="kavach-digital-arrest-warning.wav"`, `Cache-Control: no-store`.
+- Playback evaluation: User confirmed that speech delivery at speed 0.95 was clear, natural, and complete across all four guidance sentences.
+
+### Verification summary
+
+- TTS test suite: 13 passed, 0 failed.
+- Complete backend suite: 100 passed, 0 failed, 1 non-failing warning in 9.63s.
+- Python compilation: passed.
+- `git diff --check`: passed.
+
+### Scope and limitations
+
+This milestone implements standalone digital-arrest warning synthesis. Automatic detection-to-warning triggering, audio streaming through WebSockets, frontend audio playback, and playback cancellation/revocation handling remain pending.
+
+### Git status
+
+Stage 4.3 implementation, tests and documentation are awaiting final review and commit/push.
