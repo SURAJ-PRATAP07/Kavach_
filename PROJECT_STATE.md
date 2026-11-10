@@ -127,6 +127,29 @@ The WebSocket integration handles empty or invalid transcript text without allow
 
 **Limitations:** Phrase matching is not general contextual understanding. Negation, reported speech, speaker identity and legitimate conversational context are not comprehensively interpreted. No real-world detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
 
+**Stage 4.1 - Explainable warning policy: Implemented and automated-test verified**
+
+Added:
+- `backend/app/detection/warning_policy.py`
+- `backend/tests/test_warning_policy.py`
+
+Implemented `evaluate_warning_policy()` with three decision levels:
+- MONITOR: no evidence or one non-financial stage.
+- ADVISORY: financial extraction alone or two non-financial stages.
+- WARNING: financial extraction plus another distinct stage, or at least three distinct stages.
+
+The policy:
+- Counts distinct detected stages rather than evidence-record frequency.
+- Preserves unique matched rule IDs.
+- Produces deterministic stage ordering.
+- Returns reason codes explaining each decision.
+- Requires explicit consent before spoken warnings are permitted.
+- Suppresses repeat speech when the caller indicates that a warning has already been sent.
+
+The policy is a deterministic heuristic, not a calibrated fraud probability or confirmed fraud verdict.
+
+**Integration boundary:** The policy is currently an independent Python module. It is not yet connected to WebSocket streaming or automatic Gnani Timbre playback. The caller must maintain session warning state.
+
 ## Current Test Status
 
 Latest complete backend verification on 2026-11-10:
@@ -140,12 +163,12 @@ Latest complete backend verification on 2026-11-10:
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
-| **Total** | **77** |
+| Warning policy | 11 |
+| **Total** | **88** |
 
-Result: **77 passed, 0 failed, 1 non-failing warning.**
+Result: **88 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
-Execution time: 10.03 seconds.
 
 Additional verification:
 - Python compilation using `python -m compileall`: passed.
@@ -182,12 +205,13 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | REST transcription-to-detection integration | Implemented and automated-test verified |
 | WebSocket transcript-event-to-detection integration | Implemented and automated-test verified |
 | Conversation-level cumulative detection | Implemented and automated-test verified |
+| Explainable warning policy | Implemented and tested (11 tests) |
 | Contextual and hybrid scam detection | Pending |
 | Calibrated explainable risk scoring | Pending |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 77 passing, 1 non-failing warning |
+| Automated backend tests | 88 passing, 1 non-failing warning |
 
 ## Pending Components
 

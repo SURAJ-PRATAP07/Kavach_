@@ -364,6 +364,40 @@ Scoring weights and thresholds must be evaluated against labelled legitimate and
 
 No numerical or calibrated risk score is currently implemented.
 
+### 5.4 Implemented: Explainable Warning Policy
+
+File:
+
+`backend/app/detection/warning_policy.py`
+
+The pure policy function `evaluate_warning_policy()` consumes a cumulative `DetectionResult` and returns a structured `WarningDecision`.
+
+Decision thresholds:
+
+| Evidence | Level |
+|---|---|
+| No evidence | MONITOR |
+| One non-financial stage | MONITOR |
+| Financial extraction alone | ADVISORY |
+| Two non-financial stages | ADVISORY |
+| Financial extraction plus another distinct stage | WARNING |
+| Three or more distinct stages | WARNING |
+
+The policy counts distinct stages, not the number of evidence records. Repeated evidence from one stage cannot independently escalate the decision.
+
+The output contains:
+- Warning level.
+- Whether spoken warning is permitted.
+- Reason codes.
+- Unique matched rule IDs.
+- Distinct detected stages.
+
+Spoken warnings require explicit consent and are suppressed when the caller indicates a warning has already been sent.
+
+The policy does not itself maintain WebSocket session state, trigger TTS, or send audio. These integrations remain pending.
+
+The thresholds are initial engineering heuristics. They have not been calibrated using a labelled dataset.
+
 ## 6. Planned Safety Response and Integration
 
 The future warning workflow will:
@@ -384,6 +418,7 @@ The future warning workflow will:
 - Structured evidence generation for four scam stages.
 - Independent detection results attached to individual WebSocket transcript events.
 - Cumulative conversation-level evidence aggregation within each WebSocket connection.
+- Independent explainable warning policy (`evaluate_warning_policy`).
 - Standalone Gnani Timbre warning synthesis endpoint.
 
 **Remaining integration work:**
@@ -422,6 +457,7 @@ Current test files:
 - `test_detection_schemas.py`
 - `test_detection_engine.py`
 - `test_conversation_detection.py`
+- `test_warning_policy.py`
 
 Latest complete automated verification on 2026-11-10:
 
@@ -434,9 +470,10 @@ Latest complete automated verification on 2026-11-10:
 | Detection data schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
-| **Total** | **77** |
+| Warning policy | 11 |
+| **Total** | **88** |
 
-Result: **77 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Result: **88 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
 The WebSocket suite includes four detection-integration tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 
@@ -478,6 +515,7 @@ Kavach/
 |   |       +-- rules.py
 |   |       +-- engine.py
 |   |       +-- conversation.py
+|   |       +-- warning_policy.py
 |   |
 |   +-- tests/
 |   |   +-- test_transcribe.py
@@ -486,6 +524,7 @@ Kavach/
 |   |   +-- test_detection_schemas.py
 |   |   +-- test_detection_engine.py
 |   |   +-- test_conversation_detection.py
+|   |   +-- test_warning_policy.py
 |   |
 |   +-- .env.example
 |   +-- requirements.txt

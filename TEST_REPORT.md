@@ -660,3 +660,63 @@ These tests verify implementation behaviour, not real-world scam-detection accur
 They do not establish contextual understanding, calibrated risk probabilities, precision, recall, false-positive rate or false-negative rate.
 
 The cumulative accumulator is in-memory and connection-scoped. It does not persist data across reconnects.
+
+
+---
+
+## Test Report - Stage 4.1 Explainable Warning Policy
+
+**Date:** 2026-11-10
+
+### Environment
+
+- Operating system: Windows
+- Python: 3.11.9
+- pytest: 8.4.2
+- Virtual environment: `backend/.venv`
+
+### New test file
+
+`backend/tests/test_warning_policy.py`
+
+11 tests cover:
+1. Empty evidence.
+2. Single threat.
+3. Financial extraction alone.
+4. Two non-financial stages.
+5. Financial extraction plus threat.
+6. Three distinct stages.
+7. Consent disabled.
+8. Consent enabled.
+9. Repeat-warning suppression.
+10. Unique matched rule collection.
+11. Advisory without spoken warning.
+
+Tests use the actual local phrase-based detection engine to construct their input evidence.
+
+### Results
+
+| Metric | Result |
+|---|---:|
+| Warning policy tests | 11 passed |
+| Complete backend suite | 88 passed |
+| Failed tests | 0 |
+| Non-failing warnings | 1 |
+
+The complete backend suite passed twice consecutively, with observed runtimes of 9.39 and 9.57 seconds.
+
+The targeted warning-policy suite passed in 0.27 seconds.
+
+Python compilation completed successfully.
+
+`git diff --check` completed without errors.
+
+### Warning
+
+One non-failing Starlette deprecation warning concerns using `httpx` with `starlette.testclient`. It does not currently cause test failures.
+
+### Limitations
+
+These tests establish deterministic policy behaviour for the tested evidence combinations. They do not establish real-world scam-detection accuracy or validate the policy thresholds against a labelled dataset.
+
+Automatic WebSocket warning orchestration, session-state management and Gnani Timbre audio delivery are not yet implemented.

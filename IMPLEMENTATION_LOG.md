@@ -685,3 +685,55 @@ Updated `backend/tests/test_streaming.py` to verify cumulative evidence in WebSo
 ### Git status
 
 Stage 3 implementation and tests are staged locally. Documentation changes and final commit/push remain pending.
+
+
+---
+
+## Stage 4.1 - Explainable Warning Policy
+
+**Status:** Implemented and automated-test verified; Git commit/push pending.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Create a deterministic policy that translates cumulative scam-stage evidence into an explainable monitoring, advisory or warning decision.
+
+### Implementation
+
+Added:
+- `backend/app/detection/warning_policy.py`
+- `backend/tests/test_warning_policy.py`
+
+Implemented:
+- `WarningLevel`: MONITOR, ADVISORY and WARNING.
+- Immutable `WarningDecision` output.
+- `evaluate_warning_policy()` function.
+- Distinct-stage escalation thresholds.
+- Unique matched rule-ID collection.
+- Canonical stage ordering.
+- Consent gating for spoken warnings.
+- Repeat-warning suppression based on caller-provided session state.
+
+### Verification
+
+- Warning policy tests: 11 passed.
+- Complete backend suite: 88 passed, 0 failed, 1 non-failing warning.
+- Python environment: 3.11.9.
+- pytest: 8.4.2.
+- Complete suite passed twice consecutively.
+- Targeted warning-policy suite passed using the project virtual environment.
+- Python compilation: successful.
+- `git diff --check`: successful.
+
+### Limitations
+
+The policy is a deterministic heuristic, not a calibrated probability or fraud verdict.
+
+It does not maintain session state itself, trigger TTS, deliver audio or integrate with the WebSocket workflow.
+
+The thresholds have not been evaluated against a labelled dataset.
+
+### Git status
+
+Implementation, tests and documentation are awaiting final review and commit/push.
