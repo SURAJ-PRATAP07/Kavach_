@@ -76,7 +76,7 @@ def validate_synthesized_wav(audio_bytes: bytes) -> tuple[int, float]:
             duration = round(num_frames / sample_rate, 3)
             return len(audio_bytes), duration
 
-    except wave.Error as exc:
+    except (wave.Error, EOFError, struct.error) as exc:
         raise ValueError(f"Invalid WAV container: {exc}") from exc
 
 

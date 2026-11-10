@@ -930,7 +930,9 @@ File: `backend/tests/test_streaming.py`
 | `test_incorrect_channel_count_rejected` | Verifies that multichannel audio (e.g. stereo) is rejected | PASS |
 | `test_incorrect_sample_width_rejected` | Verifies that sample widths other than 16-bit (2 bytes) are rejected | PASS |
 | `test_metadata_transmission_failure_prevents_warning_marked_sent` | Verifies delivery lifecycle guards against premature success state | PASS |
+| `test_binary_transmission_failure_prevents_warning_marked_sent` | Verifies binary audio transmission failure does not mark the warning as successfully sent and does not trigger a retry | PASS |
 | `test_validate_synthesized_wav_helper_direct` | Directly validates format validation helper error conditions | PASS |
+| Expanded truncated-WAV validation | Verifies truncated WAV headers and incomplete chunks are rejected safely | PASS |
 | `test_transcription_continues_after_tts_error` | Verifies that ongoing transcription continues normally after recoverable TTS failure | PASS |
 
 ### Complete backend test results (Stage 4.4 Hardened)
@@ -939,20 +941,22 @@ File: `backend/tests/test_streaming.py`
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection, consent, & warning triggering | 38 |
-| TTS service & endpoints | 13 |
+| WebSocket streaming, lifecycle, detection, consent, and warning triggering | 39 |
+| TTS service and endpoints | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **116** |
+| **Total** | **117** |
 
-Result: **116 passed, 0 failed, 1 non-failing warning.**
+Result: **117 passed, 0 failed, 1 non-failing warning.**
 
-Duration: ~29.8 seconds.
+Duration: 29.20 seconds.
 
 ### Verification summary
 
-- Python compilation: `python -m compileall -q backend\app backend\tests` passed without errors.
+- Complete backend suite: **117 passed, 0 failed, 1 non-failing warning**.
+- Environment: project virtual environment, Python 3.11.9, pytest 8.4.2.
+- Python compilation: `.\backend\.venv\Scripts\python.exe -m compileall -q backend\app backend\tests` passed.
 - `git diff --check`: passed.
-- Known non-failing warning: Starlette deprecation warning regarding httpx with `starlette.testclient`.
+- The remaining Starlette deprecation warning concerns using `httpx` with `starlette.testclient`; it does not cause test failures.

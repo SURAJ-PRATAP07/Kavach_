@@ -917,26 +917,37 @@ Key components implemented and hardened:
 
 ### Automated tests
 
-Added 16 integration and validation tests in `backend/tests/test_streaming.py`:
-1. `test_transcript_includes_warning_decision`: Verifies explainable `warning_decision` structure in transcript events.
-2. `test_automatic_warning_triggered_when_consent_granted`: Verifies end-to-end synthesis invocation, `safety_warning` JSON metadata, and binary WAV frame delivery.
-3. `test_warning_not_triggered_without_consent`: Verifies no synthesis or audio occurs when policy escalates to `WARNING` but consent remains default `False`.
-4. `test_duplicate_warning_suppression_in_same_session`: Verifies repeat warning suppression when subsequent coercive scam phrases arrive.
-5. `test_warning_synthesis_failure_handled_gracefully`: Verifies `warning_synthesis_error` emission without session termination when TTS fails.
-6. `test_session_isolation_for_warning_trigger`: Verifies two sequential WebSocket connections maintain independent consent and warning states.
-7. `test_warning_delivery_acknowledgement_marks_sent_on_success`: Verifies delivery acknowledgement lifecycle.
-8. `test_warning_tts_failure_does_not_retry_on_later_transcripts`: Verifies bounded retry enforcement after synthesis failure.
-9. `test_invalid_wav_bytes_rejected_before_delivery`: Verifies rejection of corrupted/non-WAV data.
-10. `test_empty_wav_payload_rejected`: Verifies rejection of 0-byte payload.
-11. `test_incorrect_sample_rate_rejected`: Verifies rejection of non-16kHz sample rate.
-12. `test_incorrect_channel_count_rejected`: Verifies rejection of stereo/multichannel audio.
-13. `test_incorrect_sample_width_rejected`: Verifies rejection of 8-bit sample width.
-14. `test_metadata_transmission_failure_prevents_warning_marked_sent`: Verifies transmission failure does not mark warning sent.
-15. `test_validate_synthesized_wav_helper_direct`: Direct unit test for all format validation constraints.
-16. `test_transcription_continues_after_tts_error`: Verifies transcription continues uninterrupted after TTS failure.
+The streaming test suite now contains 39 passing tests.
 
-Total streaming tests: 38 passed. Complete backend suite: 116 passed.
+Stage 4.4 coverage includes:
+
+- Warning-policy decisions attached to transcript events.
+- Automatic TTS triggering when warning policy and session consent conditions are satisfied.
+- No automatic warning synthesis without consent.
+- Duplicate warning suppression.
+- Graceful TTS failure handling and bounded retry behaviour.
+- Independent warning state across sequential WebSocket sessions.
+- Successful metadata and binary transmission acknowledgements.
+- Metadata transmission failure does not mark a warning as sent.
+- Binary transmission failure does not mark a warning as sent.
+- Invalid, empty, malformed, and truncated WAV payload rejection.
+- Mono, 16 kHz, 16-bit PCM format validation.
+- Continued transcription after recoverable TTS errors.
+
+### Complete backend verification
+
+- Complete backend suite: 117 passed, 0 failed.
+- One non-failing Starlette deprecation warning.
+- Test duration: 29.20 seconds.
+- Python compilation: passed using the project virtual environment.
+- `git diff --check`: passed.
 
 ### Scope and limitations
 
-Stage 4.4 delivers server-side transmission acknowledgement, bounded retries, format validation, and binary streaming. Client-side playback acknowledgement and playback cancellation/revocation handling (Stage 4.5) remain pending.
+Stage 4.4 implements consent-governed warning synthesis and server-side WebSocket transmission with acknowledgement of metadata and binary audio writes.
+
+A successful server-side transmission acknowledgement does not prove that the user's browser played the warning.
+
+Frontend playback, browser playback acknowledgement, and cancellation or revocation handling during playback remain pending for Stage 4.5.
+
+The automatic warning integration has automated mock-based coverage; full browser-to-Gnani end-to-end warning playback has not yet been live-verified.

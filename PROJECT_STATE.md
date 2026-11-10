@@ -224,8 +224,8 @@ Implemented behaviour and hardened delivery lifecycle:
 - Resilient error handling: Server missing API key, `TTSServiceError`, or format validation error yields a `warning_synthesis_error` event without crashing the streaming session or terminating ongoing transcription.
 
 Automated verification on 2026-11-10:
-- WebSocket streaming tests: 38 passed (including 16 Stage 4.4 integration and lifecycle tests).
-- Complete backend suite: 116 passed, 0 failed, 1 non-failing warning.
+- WebSocket streaming tests: 39 passed (including 18 Stage 4.4 integration and lifecycle tests).
+- Complete backend suite: 117 passed, 0 failed, 1 non-failing warning.
 - Python compilation: passed.
 - `git diff --check`: passed.
 
@@ -237,15 +237,15 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection, consent and warning triggering | 38 |
+| WebSocket streaming, lifecycle, detection, consent and warning triggering | 39 |
 | TTS | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **116** |
+| **Total** | **117** |
 
-Result: **116 passed, 0 failed, 1 non-failing warning.**
+Result: **117 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
 
@@ -282,7 +282,7 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Tested for OTP (4.021s at 0.85) and digital-arrest (25.303s at 0.95); confirmed clear and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 116 passing, 1 non-failing warning |
+| Automated backend tests | 117 passing, 1 non-failing warning |
 | Automatic warning triggering | Implemented and automated-test verified (WebSocket metadata + binary WAV) |
 
 ## Pending Components

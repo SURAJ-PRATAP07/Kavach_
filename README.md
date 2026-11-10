@@ -27,7 +27,7 @@ Currently implemented and verified:
 - Explainable warning policy (`evaluate_warning_policy`): deterministic heuristic evaluation with distinct-stage thresholds (MONITOR, ADVISORY, WARNING), consent gating, and repeat-warning suppression.
 - Backend WebSocket consent protocol for automatic spoken safety warnings, with strict Boolean validation, grant/revoke acknowledgements and session reset on reconnect.
 - Automated warning triggering pipeline: evaluates warning policy against cumulative evidence on every transcript event, synthesizes digital-arrest warning audio via Gnani Timbre upon reaching `WARNING` level with granted consent, validates WAV audio parameters, enforces a bounded single-attempt retry policy, and delivers JSON `safety_warning` metadata followed by binary WAV audio frames with transmission acknowledgement.
-- Automated backend tests: **116 passed, 0 failed, 1 non-failing deprecation warning**.
+- Automated backend tests: **117 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
@@ -252,11 +252,11 @@ The endpoint returns the transcription and available provider metadata.
 
 ### `POST /synthesize-warning`
 
-Synthesizes the currently configured standalone Hindi safety warning for OTP protection using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.85`). The response is WAV audio (`audio/wav`). This endpoint is not yet automatically triggered by scam detection.
+Synthesizes the standalone Hindi safety warning for OTP protection using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.85`). The response is WAV audio (`audio/wav`). This endpoint remains independently callable; it is not the automatic scam-warning endpoint.
 
 ### `POST /synthesize-digital-arrest-warning`
 
-Synthesizes the general-purpose Hindi digital-arrest safety warning using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.95`). The warning consists of four guidance sentences advising victims not to panic, never to transfer funds or share credentials, to disconnect and independently verify through official portals, and to consult trusted family members. The response is standard WAV audio (`audio/wav`). This endpoint operates as a standalone service and is not yet automatically triggered by scam detection.
+Synthesizes the general-purpose Hindi digital-arrest safety warning using Gnani Timbre (`timbre-v3.0`, voice `Tarika`, speed `0.95`). The warning contains four guidance sentences advising victims not to panic, not to transfer funds or share credentials, to disconnect and independently verify through official channels, and to consult trusted family members. The response is standard WAV audio (`audio/wav`). This endpoint remains independently callable; the WebSocket warning pipeline separately invokes the same synthesis service when its warning policy and consent conditions are satisfied.
 
 ### `WS /ws/transcribe`
 
@@ -288,9 +288,9 @@ Stage 4.1 implements `evaluate_warning_policy()` in `backend/app/detection/warni
 - **ADVISORY**: Financial extraction alone, or two non-financial stages.
 - **WARNING**: Financial extraction plus another distinct stage, or three or more distinct stages.
 
-The policy uses deterministic heuristics, collects unique matched rule IDs, gates spoken warnings behind explicit user consent, and suppresses repeat spoken warnings within a session. It does not yet automatically trigger Gnani Timbre playback or manage live session state.
+The policy uses deterministic heuristics, collects unique matched rule IDs, gates spoken warnings behind explicit user consent, and suppresses repeat spoken warnings within a session. It is integrated with the WebSocket streaming pipeline, which evaluates cumulative evidence and can trigger Gnani Timbre warning synthesis and server-side audio delivery when the WARNING threshold and consent conditions are satisfied.
 
-**Current limitations:** Detection remains phrase-based. Cumulative WebSocket evidence is aggregated within a single connection, but the system does not perform contextual conversation understanding or calculate calibrated probabilities. Automatic warning triggering is not yet integrated.
+**Current limitations:** Detection remains phrase-based. Cumulative WebSocket evidence is aggregated within a single connection, but the system does not perform contextual conversation understanding or calculate calibrated probabilities. Successful server-side WebSocket transmission does not confirm browser playback.
 
 ### WebSocket spoken-warning consent
 
@@ -306,17 +306,15 @@ Only JSON Boolean values are accepted. The backend acknowledges valid changes an
 
 This protocol controls automatic spoken safety warnings only. It does not represent consent for audio capture, transcription or analysis.
 
-The frontend consent UI and automatic warning/TTS integration are not yet implemented.
+The backend consent protocol and automatic warning/TTS integration are implemented. Frontend consent controls, browser-side audio playback, playback confirmation and playback cancellation/revocation handling remain pending (Stage 4.5).
 
 ### Automated testing
 
-Latest complete backend verification on 2026-11-10:
+Latest complete backend verification on 2026-11-10: **117 passed, 0 failed, 1 non-failing deprecation warning**.
 
-- 100 tests passed.
-- 0 tests failed.
-- 1 non-failing deprecation warning.
+The streaming test file passes 39 tests, including metadata and binary warning-delivery failure simulations.
 
-The test suite covers REST and WebSocket transcription, 22 WebSocket streaming and consent tests, 13 TTS service and endpoint tests, phrase-based detection, cumulative evidence aggregation, and the explainable warning policy.
+The test suite covers REST and WebSocket transcription, 39 WebSocket streaming tests (including warning triggering, delivery acknowledgement and failure-path simulations), 13 TTS service and endpoint tests, phrase-based detection, cumulative evidence aggregation, and the explainable warning policy.
 
 Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis for both OTP and digital-arrest warnings.
 
@@ -332,7 +330,7 @@ The project maintains:
 - ARCHITECTURE.md — System architecture and design decisions.
 - IMPLEMENTATION_LOG.md — Development history.
 
-The 100 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -363,9 +361,9 @@ The 100 passing automated backend tests do not establish real-world scam detecti
 - [ ] Frontend consent UI for spoken safety warnings.
 - [ ] Contextual scam-stage detection and improved negation/context handling.
 - [ ] Evaluation against labelled legitimate and scam conversations.
-- [ ] Warning-policy integration with WebSocket streaming.
+- [x] Warning-policy integration with WebSocket streaming.
 - [x] Standalone Gnani Timbre TTS endpoints for OTP and digital-arrest warnings (live-verified).
-- [ ] Automatic warning triggering and TTS audio delivery.
+- [x] Consent-based automatic warning triggering and server-side TTS audio delivery.
 - [ ] Frontend dashboard and consent workflow.
 - [ ] Trusted-family notifications.
 - [ ] Incident summary generation.

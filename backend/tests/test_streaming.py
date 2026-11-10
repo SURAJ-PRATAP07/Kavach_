@@ -1398,20 +1398,40 @@ def test_metadata_transmission_failure_prevents_warning_marked_sent(
     configured_client,
     monkeypatch,
 ):
-    """If enqueue_message fails when sending safety_warning metadata, warning_already_sent is not set."""
+    """If metadata delivery acknowledgement fails, binary audio is not sent and warning is not marked sent."""
+    orig_queue = streaming.asyncio.Queue
+
+    class InterceptMetadataQueue(asyncio.Queue):
+        async def put(self, item):
+            if item is not None and isinstance(item, tuple) and len(item) == 2:
+                payload, ack = item
+                if isinstance(payload, dict) and payload.get("type") == "safety_warning":
+                    if ack is not None and not ack.done():
+                        ack.set_exception(
+                            RuntimeError("Simulated metadata delivery acknowledgement failure")
+                        )
+                    return
+            await super().put(item)
+
+    monkeypatch.setattr(streaming.asyncio, "Queue", InterceptMetadataQueue)
+
+    synth_calls = []
     dummy_wav = _make_dummy_wav()
+
+    def mock_synthesize(api_key):
+        synth_calls.append(api_key)
+        return dummy_wav
+
     monkeypatch.setattr(
         streaming,
         "synthesize_digital_arrest_warning",
-        lambda api_key: dummy_wav,
+        mock_synthesize,
     )
 
-    original_enqueue = None
-
-    # We intercept enqueue_message: when payload is safety_warning dict, simulate failure
     FakeGnaniStreamClient.transcript_events = [
         StreamTranscriptEvent("Transfer your money to a safe account."),
         StreamTranscriptEvent("You will be arrested."),
+        StreamTranscriptEvent("Do not tell anyone about this call."),
     ]
 
     with configured_client.websocket_connect("/ws/transcribe") as websocket:
@@ -1422,18 +1442,115 @@ def test_metadata_transmission_failure_prevents_warning_marked_sent(
         }))
         assert websocket.receive_json()["type"] == "warning_consent_updated"
 
-        # Intercept enqueue_message by monkeypatching on the session scope
-        # In Starlette TestClient, we can simulate an enqueue returning False for safety_warning
-        # We test validate_synthesized_wav and logic directly to verify metadata acknowledgement guard
         websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
         websocket.send_text(json.dumps({"type": "stop"}))
+
+        json_messages = []
+        binary_frames = []
 
         while True:
             raw = websocket.receive()
             if "text" in raw:
                 msg = json.loads(raw["text"])
+                json_messages.append(msg)
                 if msg["type"] == "stopped":
                     break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    # 1. Synthesis was invoked once
+    assert len(synth_calls) == 1
+    # 2. Metadata message was NOT received by the client (intercepted/failed)
+    assert not any(m.get("type") == "safety_warning" for m in json_messages)
+    # 3. Binary audio was NOT sent
+    assert len(binary_frames) == 0
+    # 4. Third transcript reflects that warning was not successfully sent (warning_already_sent is False)
+    transcripts = [m for m in json_messages if m.get("type") == "transcript"]
+    assert len(transcripts) == 3
+    third_decision = transcripts[2]["warning_decision"]
+    assert "WARNING_ALREADY_SENT" not in third_decision["reason_codes"]
+    # 5. Session remained healthy and completed normally with stopped event
+    assert json_messages[-1]["type"] == "stopped"
+
+
+def test_binary_transmission_failure_prevents_warning_marked_sent(
+    configured_client,
+    monkeypatch,
+):
+    """If metadata succeeds but binary audio delivery fails, warning is not marked sent and no retry occurs."""
+    class InterceptBinaryQueue(asyncio.Queue):
+        async def put(self, item):
+            if item is not None and isinstance(item, tuple) and len(item) == 2:
+                payload, ack = item
+                if isinstance(payload, bytes):
+                    if ack is not None and not ack.done():
+                        ack.set_exception(
+                            RuntimeError("Simulated binary audio delivery failure")
+                        )
+                    return
+            await super().put(item)
+
+    monkeypatch.setattr(streaming.asyncio, "Queue", InterceptBinaryQueue)
+
+    synth_calls = []
+    dummy_wav = _make_dummy_wav()
+
+    def mock_synthesize(api_key):
+        synth_calls.append(api_key)
+        return dummy_wav
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+        StreamTranscriptEvent("Do not tell anyone about this call."),
+    ]
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert websocket.receive_json()["type"] == "warning_consent_updated"
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        json_messages = []
+        binary_frames = []
+
+        while True:
+            raw = websocket.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                json_messages.append(msg)
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    # 1. Synthesis was invoked once
+    assert len(synth_calls) == 1
+    # 2. Metadata message succeeded and was received by client
+    safety_warnings = [m for m in json_messages if m.get("type") == "safety_warning"]
+    assert len(safety_warnings) == 1
+    # 3. Binary audio delivery failed and was NOT received
+    assert len(binary_frames) == 0
+    # 4. Third transcript reflects that warning_already_sent is False (never marked successfully sent)
+    transcripts = [m for m in json_messages if m.get("type") == "transcript"]
+    assert len(transcripts) == 3
+    third_decision = transcripts[2]["warning_decision"]
+    assert "WARNING_ALREADY_SENT" not in third_decision["reason_codes"]
+    # 5. Bounded retry policy ensures no second synthesis attempt occurred
+    assert len(synth_calls) == 1
+    # 6. Session remained operational and completed normally
+    assert json_messages[-1]["type"] == "stopped"
 
 
 def test_validate_synthesized_wav_helper_direct():
@@ -1469,6 +1586,14 @@ def test_validate_synthesized_wav_helper_direct():
     # Bad sample width
     with pytest.raises(ValueError, match="sample width: 1"):
         validate_synthesized_wav(_make_custom_wav(sample_width=1))
+
+    # Truncated header (triggers EOFError inside wave.open)
+    with pytest.raises(ValueError, match="Invalid WAV container"):
+        validate_synthesized_wav(b"RIFF")
+
+    # Truncated partial chunk (triggers wave.Error / struct.error)
+    with pytest.raises(ValueError, match="Invalid WAV container"):
+        validate_synthesized_wav(b"RIFF\x20\x00\x00\x00WAV")
 
 
 def test_transcription_continues_after_tts_error(
