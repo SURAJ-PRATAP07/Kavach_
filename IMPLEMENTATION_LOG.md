@@ -874,4 +874,54 @@ This milestone implements standalone digital-arrest warning synthesis. Automatic
 
 ### Git status
 
-Stage 4.3 implementation, tests and documentation are awaiting final review and commit/push.
+Stage 4.3 implementation, tests and documentation were reviewed and committed in `078f02b feat: add digital-arrest safety warning TTS`.
+
+---
+
+## Stage 4.4 — Automatic scam warning triggering and Gnani Timbre WebSocket integration
+
+**Status:** Implemented and automated-test verified.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Integrate the scam detection engine, warning policy, session-scoped consent protocol, and Gnani Timbre TTS service into the live WebSocket streaming pipeline (`/ws/transcribe`) to achieve automatic, consent-governed warning audio triggering.
+
+### Implementation
+
+Updated:
+- `backend/app/streaming.py`
+- `backend/tests/test_streaming.py`
+
+Key components implemented:
+1. **Warning policy evaluation per transcript event**:
+   - `forward_provider_events()` evaluates `evaluate_warning_policy` against cumulative evidence from `ConversationDetectionAccumulator`.
+   - Attaches `warning_decision` dictionary (`level`, `should_speak`, `reason_codes`, `matched_rule_ids`, `distinct_stages`) to every outgoing `transcript` event.
+2. **Consent-governed automatic speech triggering**:
+   - Checks `decision.should_speak` (requires `WARNING` level, session consent granted, and no prior warning sent).
+   - Offloads `synthesize_digital_arrest_warning` to the Starlette thread pool (`run_in_threadpool`) using the configured `gnani_api_key`.
+3. **Two-phase delivery over WebSocket**:
+   - Sends `safety_warning` JSON message with audio metadata (`level`, `distinct_stages`, `audio_format`, `audio_bytes`, `audio_duration_seconds`).
+   - Dispatches the complete WAV payload as a binary frame to the client.
+4. **Session deduplication & concurrency safety**:
+   - `warning_already_sent` session boolean flag ensures warnings are triggered at most once per connection.
+   - `warning_in_progress` guard prevents re-entrant synthesis during in-flight operations.
+5. **Resilient failure isolation**:
+   - Catches `TTSServiceError` or missing API keys and emits `warning_synthesis_error` JSON events without dropping the WebSocket connection or stopping transcription.
+
+### Automated tests
+
+Added 6 integration tests in `backend/tests/test_streaming.py`:
+1. `test_transcript_includes_warning_decision`: Verifies explainable `warning_decision` structure in transcript events.
+2. `test_automatic_warning_triggered_when_consent_granted`: Verifies end-to-end synthesis invocation, `safety_warning` JSON metadata, and binary WAV frame delivery.
+3. `test_warning_not_triggered_without_consent`: Verifies no synthesis or audio occurs when policy escalates to `WARNING` but consent remains default `False`.
+4. `test_duplicate_warning_suppression_in_same_session`: Verifies repeat warning suppression when subsequent coercive scam phrases arrive.
+5. `test_warning_synthesis_failure_handled_gracefully`: Verifies `warning_synthesis_error` emission without session termination when TTS fails.
+6. `test_session_isolation_for_warning_trigger`: Verifies two concurrent/sequential WebSocket connections maintain independent consent and warning states.
+
+Total streaming tests: 28 passed. Complete backend suite: 106 passed.
+
+### Scope and limitations
+
+Stage 4.4 delivers the backend automated triggering and binary streaming. Frontend audio rendering/controls and playback cancellation/revocation handling (Stage 4.5) remain pending.

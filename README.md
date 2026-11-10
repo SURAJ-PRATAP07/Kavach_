@@ -8,7 +8,7 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2 + Detection Integrations + Stages 3, 4.1, 4.2 & 4.3: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, conversation-level evidence aggregation, explainable warning policy, session-scoped warning consent protocol, and digital-arrest warning synthesis.**
+**Milestones 0–4.2 + Detection Integrations + Stages 3, 4.1, 4.2, 4.3 & 4.4: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, conversation-level evidence aggregation, explainable warning policy, session-scoped warning consent protocol, digital-arrest warning synthesis, and automated warning triggering via WebSockets.**
 
 Currently implemented and verified:
 
@@ -26,13 +26,12 @@ Currently implemented and verified:
 - `ConversationDetectionAccumulator`: connection-scoped cumulative phrase-based evidence aggregation across WebSocket transcript events.
 - Explainable warning policy (`evaluate_warning_policy`): deterministic heuristic evaluation with distinct-stage thresholds (MONITOR, ADVISORY, WARNING), consent gating, and repeat-warning suppression.
 - Backend WebSocket consent protocol for automatic spoken safety warnings, with strict Boolean validation, grant/revoke acknowledgements and session reset on reconnect.
-- Automated backend tests: **100 passed, 0 failed, 1 non-failing deprecation warning**.
+- Automated warning triggering pipeline: evaluates warning policy against cumulative evidence on every transcript event, synthesizes digital-arrest warning audio via Gnani Timbre upon reaching `WARNING` level with granted consent, and delivers JSON `safety_warning` metadata followed by binary WAV audio frames.
+- Automated backend tests: **106 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions and triggering through Gnani Timbre, frontend consent UI, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
-
-The TTS endpoint is standalone and is not automatically triggered by detection or warning policy.
+**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, frontend consent UI and audio player, playback cancellation/revocation handling (Stage 4.5), trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
 
 ## Planned capabilities
 
@@ -49,7 +48,7 @@ The TTS endpoint is standalone and is not automatically triggered by detection o
 
 ## Architecture overview
 
-`	ext
+```text
 Consented audio input (REST / WebSocket)
         |
         v
@@ -68,23 +67,27 @@ Consented audio input (REST / WebSocket)
         |                  |
         |                  v
         |   ConversationDetectionAccumulator (WebSocket cumulative evidence)
+        |                  |
+        |                  v
+        |       Warning Policy Evaluation
+        |                  |
+        +------> Triggered Warning Audio via Gnani Timbre TTS (Binary WebSocket WAV)
         |
-        v
- Future contextual detection & calibrated risk scoring & warning policy
+        +------> Standalone TTS Endpoints (Verified)
         |
-        +------> Gnani Timbre TTS (Standalone endpoint verified)
+        +------> Future contextual detection & calibrated risk scoring
         |
-        +------> Consented family notification
+        +------> Future consented family notification
         |
         v
  Future incident summary
-`
+```
 
 The phrase-based detection engine is integrated with both REST transcription and WebSocket streaming.
 
 Each WebSocket transcript event receives an independent `detection` result and a cumulative `conversation_detection` result. The WebSocket session also maintains a separate, session-scoped consent flag for automatic spoken safety warnings.
 
-The standalone warning policy, WebSocket consent protocol and Gnani Timbre TTS endpoint are implemented independently. Automatic warning-policy orchestration and audio delivery are not yet integrated.
+When consent is granted and scam escalation reaches `WARNING` level, digital-arrest warning speech is synthesized via Gnani Timbre and delivered to the client as metadata followed by binary audio frames. Standalone warning policy and TTS endpoints also remain independently functional.
 
 ## Technology stack
 

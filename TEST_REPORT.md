@@ -895,3 +895,54 @@ One non-failing Starlette deprecation warning concerns using `httpx` with `starl
 Both TTS endpoints operate as standalone HTTP services. They are not yet automatically triggered by the phrase-based scam detection engine, cumulative conversation detection, or the warning policy.
 
 Frontend audio playback orchestration, streaming audio transport, and playback revocation/cancellation remain pending.
+
+---
+
+## Test Report — Stage 4.4 Automatic Scam Warning Triggering & WebSocket Integration
+
+**Date:** 2026-11-10
+
+### Environment
+
+- Operating system: Windows
+- Python: 3.11.9
+- pytest: 8.4.2
+- Backend framework: FastAPI / Starlette
+- Speech synthesis: Gnani Timbre v3.0
+
+### New integration tests
+
+File: `backend/tests/test_streaming.py`
+
+| Test | Objective & Expected Behaviour | Result |
+|---|---|---|
+| `test_transcript_includes_warning_decision` | Validates transcript events contain `warning_decision` with level, should_speak, stages, and reason codes | PASS |
+| `test_automatic_warning_triggered_when_consent_granted` | Verifies warning policy escalation + consent triggers synthesis, JSON `safety_warning` event, and binary WAV delivery | PASS |
+| `test_warning_not_triggered_without_consent` | Verifies policy escalation without consent generates no synthesis and sends `CONSENT_NOT_GRANTED` in decision | PASS |
+| `test_duplicate_warning_suppression_in_same_session` | Verifies repeat warning phrases suppress secondary speech triggers (`WARNING_ALREADY_SENT`) | PASS |
+| `test_warning_synthesis_failure_handled_gracefully` | Verifies `TTSServiceError` emits `warning_synthesis_error` without aborting the streaming session | PASS |
+| `test_session_isolation_for_warning_trigger` | Verifies state and consent isolation across independent WebSocket sessions | PASS |
+
+### Complete backend test results (Stage 4.4)
+
+| Test group | Passed |
+|---|---:|
+| Health endpoint | 1 |
+| REST transcription | 10 |
+| WebSocket streaming, lifecycle, detection, consent & warning triggering | 28 |
+| TTS service & endpoints | 13 |
+| Detection schemas | 8 |
+| Detection engine | 31 |
+| Conversation detection | 4 |
+| Warning policy | 11 |
+| **Total** | **106** |
+
+Result: **106 passed, 0 failed, 1 non-failing warning.**
+
+Duration: ~16.8 seconds.
+
+### Verification summary
+
+- Python compilation: `python -m compileall -q backend\app backend\tests` passed without errors.
+- `git diff --check`: passed.
+- Known non-failing warning: Starlette deprecation warning regarding httpx with `starlette.testclient`.

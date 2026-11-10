@@ -679,3 +679,365 @@ def test_websocket_warning_consent_resets_on_reconnect(
 
         second_session.close()
         FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+
+def _make_dummy_wav():
+    """Create a minimal valid WAV file for mocking synthesis."""
+    from io import BytesIO
+    import wave
+
+    buf = BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\x00\x00" * 1600)  # 0.1s
+    return buf.getvalue()
+
+
+def test_transcript_includes_warning_decision(configured_client):
+    """Transcript events include explainable warning_decision metadata."""
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("You will be arrested.")
+    ]
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        received = []
+        while True:
+            msg = websocket.receive_json()
+            received.append(msg)
+            if msg["type"] == "stopped":
+                break
+
+    transcripts = [m for m in received if m["type"] == "transcript"]
+    assert len(transcripts) == 1
+    wd = transcripts[0]["warning_decision"]
+    assert wd["level"] == "monitor"
+    assert wd["should_speak"] is False
+    assert "threats" in wd["distinct_stages"]
+    assert "THREAT_ARREST" in wd["matched_rule_ids"]
+
+
+def test_automatic_warning_triggered_when_consent_granted(
+    configured_client,
+    monkeypatch,
+):
+    """When consent is granted and scam escalation reaches WARNING, audio is synthesized and delivered."""
+    dummy_wav = _make_dummy_wav()
+    synthesize_calls = []
+
+    def mock_synthesize(api_key):
+        synthesize_calls.append(api_key)
+        return dummy_wav
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+    ]
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+
+        # Grant consent first
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert websocket.receive_json()["type"] == "warning_consent_updated"
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        # Collect messages (both JSON and binary)
+        json_messages = []
+        binary_frames = []
+
+        while True:
+            raw = websocket.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                json_messages.append(msg)
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    # Verify synthesis was invoked with the right key
+    assert len(synthesize_calls) == 1
+    assert synthesize_calls[0] == "test-api-key"
+
+    # Verify safety_warning event
+    safety_warnings = [
+        m for m in json_messages if m["type"] == "safety_warning"
+    ]
+    assert len(safety_warnings) == 1
+    sw = safety_warnings[0]
+    assert sw["level"] == "warning"
+    assert sw["audio_format"] == "wav"
+    assert sw["audio_bytes"] == len(dummy_wav)
+    assert sw["audio_duration_seconds"] == 0.1
+    assert "WARNING_TRIGGERED" in sw["reason_codes"]
+    assert set(sw["distinct_stages"]) == {"financial_extraction", "threats"}
+
+    # Verify binary frame delivered
+    assert len(binary_frames) == 1
+    assert binary_frames[0] == dummy_wav
+
+
+def test_warning_not_triggered_without_consent(
+    configured_client,
+    monkeypatch,
+):
+    """Escalation reaches WARNING, but consent is False -> no TTS synthesis or audio."""
+    synthesize_calls = []
+
+    def mock_synthesize(api_key):
+        synthesize_calls.append(api_key)
+        return _make_dummy_wav()
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+    ]
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+        # No consent granted (defaults to False)
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        json_messages = []
+        binary_frames = []
+
+        while True:
+            raw = websocket.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                json_messages.append(msg)
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    assert len(synthesize_calls) == 0
+    assert len(binary_frames) == 0
+    assert not any(m["type"] == "safety_warning" for m in json_messages)
+
+    # Check transcript warning decision
+    transcripts = [m for m in json_messages if m["type"] == "transcript"]
+    assert len(transcripts) == 2
+    second_decision = transcripts[1]["warning_decision"]
+    assert second_decision["level"] == "warning"
+    assert second_decision["should_speak"] is False
+    assert "CONSENT_NOT_GRANTED" in second_decision["reason_codes"]
+
+
+def test_duplicate_warning_suppression_in_same_session(
+    configured_client,
+    monkeypatch,
+):
+    """Warning is triggered once per session even if further scam segments arrive."""
+    dummy_wav = _make_dummy_wav()
+    synthesize_calls = []
+
+    def mock_synthesize(api_key):
+        synthesize_calls.append(api_key)
+        return dummy_wav
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+        StreamTranscriptEvent("Do not tell anyone about this call."),
+    ]
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert websocket.receive_json()["type"] == "warning_consent_updated"
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        json_messages = []
+        binary_frames = []
+
+        while True:
+            raw = websocket.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                json_messages.append(msg)
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    # Only synthesized once
+    assert len(synthesize_calls) == 1
+    assert len(binary_frames) == 1
+
+    safety_warnings = [
+        m for m in json_messages if m["type"] == "safety_warning"
+    ]
+    assert len(safety_warnings) == 1
+
+    transcripts = [m for m in json_messages if m["type"] == "transcript"]
+    assert len(transcripts) == 3
+    third_decision = transcripts[2]["warning_decision"]
+    assert third_decision["level"] == "warning"
+    assert third_decision["should_speak"] is False
+    assert "WARNING_ALREADY_SENT" in third_decision["reason_codes"]
+
+
+def test_warning_synthesis_failure_handled_gracefully(
+    configured_client,
+    monkeypatch,
+):
+    """TTS service failure emits warning_synthesis_error without breaking the session."""
+    def mock_failing_synthesize(api_key):
+        from app.tts import TTSServiceError
+        raise TTSServiceError("Gnani TTS provider unavailable")
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_failing_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+    ]
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert websocket.receive_json()["type"] == "warning_consent_updated"
+
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        websocket.send_text(json.dumps({"type": "stop"}))
+
+        json_messages = []
+        binary_frames = []
+
+        while True:
+            raw = websocket.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                json_messages.append(msg)
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                binary_frames.append(raw["bytes"])
+
+    # No audio frame sent
+    assert len(binary_frames) == 0
+
+    # warning_synthesis_error received
+    synth_errors = [
+        m for m in json_messages if m["type"] == "warning_synthesis_error"
+    ]
+    assert len(synth_errors) == 1
+    assert "error" in synth_errors[0]["message"].lower()
+
+    # Session completed normally with 'stopped'
+    assert json_messages[-1]["type"] == "stopped"
+
+
+def test_session_isolation_for_warning_trigger(
+    configured_client,
+    monkeypatch,
+):
+    """Two separate WebSocket sessions have independent warning states and consent."""
+    dummy_wav = _make_dummy_wav()
+    synthesize_calls = []
+
+    def mock_synthesize(api_key):
+        synthesize_calls.append(api_key)
+        return dummy_wav
+
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        mock_synthesize,
+    )
+
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+    ]
+
+    # Session 1: Consent granted -> warning triggered
+    with configured_client.websocket_connect("/ws/transcribe") as session1:
+        assert session1.receive_json()["type"] == "ready"
+        session1.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert session1.receive_json()["type"] == "warning_consent_updated"
+
+        session1.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        session1.send_text(json.dumps({"type": "stop"}))
+
+        while True:
+            raw = session1.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                if msg["type"] == "stopped":
+                    break
+
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+    assert len(synthesize_calls) == 1
+
+    # Session 2: Fresh session, consent defaults False -> no warning
+    with configured_client.websocket_connect("/ws/transcribe") as session2:
+        assert session2.receive_json()["type"] == "ready"
+
+        session2.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+        session2.send_text(json.dumps({"type": "stop"}))
+
+        s2_binary = []
+        while True:
+            raw = session2.receive()
+            if "text" in raw:
+                msg = json.loads(raw["text"])
+                if msg["type"] == "stopped":
+                    break
+            elif "bytes" in raw:
+                s2_binary.append(raw["bytes"])
+
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+    # Still only 1 call across sessions; session 2 didn't trigger
+    assert len(synthesize_calls) == 1
+    assert len(s2_binary) == 0

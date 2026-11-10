@@ -123,7 +123,7 @@ The engine currently:
 
 The WebSocket integration handles empty or invalid transcript text without allowing detection to interrupt the streaming workflow. Automated tests cover scam-signal detection, harmless transcripts, metadata preservation and independent analysis of multiple transcript events.
 
-**Current integration boundary:** Each WebSocket transcript event receives an independent detection result and a cumulative `conversation_detection` result. A connection-scoped `ConversationDetectionAccumulator` retains phrase-based evidence across transcript events within that WebSocket session. This is evidence aggregation, not contextual conversation understanding or a calibrated conversation-level risk assessment. Automatic Gnani Timbre warning triggering remains pending.
+**Current integration boundary:** Each WebSocket transcript event receives an independent detection result and a cumulative `conversation_detection` result. A connection-scoped `ConversationDetectionAccumulator` retains phrase-based evidence across transcript events within that WebSocket session. The warning policy evaluates cumulative evidence per transcript event, and when a qualifying WARNING decision is reached and session consent is granted, automatic digital-arrest warning speech is synthesized via Gnani Timbre and delivered through the WebSocket session. Automatic warning triggering is implemented and test-verified; frontend audio playback controls and revocation/cancellation handling remain pending.
 
 **Limitations:** Phrase matching is not general contextual understanding. Negation, reported speech, speaker identity and legitimate conversational context are not comprehensively interpreted. No real-world detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
 
@@ -205,6 +205,27 @@ Automated verification on 2026-11-10:
 - Python compilation: passed.
 - `git diff --check`: passed.
 
+**Stage 4.4 — Automatic scam warning triggering and Gnani Timbre WebSocket integration: Implemented and automated-test verified**
+
+Integrated scam detection, warning policy, session-scoped consent and Gnani Timbre TTS into the WebSocket streaming pipeline (`backend/app/streaming.py`).
+
+Implemented behaviour:
+- Evaluates the explainable warning policy (`evaluate_warning_policy`) against cumulative evidence after every transcript segment.
+- Transmits an explainable `warning_decision` payload on every WebSocket transcript event (`level`, `should_speak`, `reason_codes`, `matched_rule_ids`, `distinct_stages`).
+- Automatic trigger condition: Triggers speech synthesis if and only if `decision.should_speak` is `True` (policy level is `WARNING`, session consent is granted, and no warning has previously been sent in this session).
+- Synthesis execution: Offloads synchronous `synthesize_digital_arrest_warning` to the Starlette thread pool via `run_in_threadpool` without blocking the asynchronous event loop.
+- Two-part delivery:
+  1. JSON metadata message (`type: "safety_warning"`, `level: "warning"`, `audio_format: "wav"`, `audio_bytes`, `audio_duration_seconds`, reason codes, matched rules, distinct stages).
+  2. Binary frame containing the complete WAV audio payload.
+- Session isolation & deduplication: `warning_already_sent` flag prevents duplicate warnings within the same connection.
+- Resilient error handling: Server missing API key or `TTSServiceError` yields a `warning_synthesis_error` event without crashing the streaming session or terminating the WebSocket connection.
+
+Automated verification on 2026-11-10:
+- WebSocket streaming tests: 28 passed (including 6 new Stage 4.4 integration tests).
+- Complete backend suite: 106 passed, 0 failed, 1 non-failing warning.
+- Python compilation: passed.
+- `git diff --check`: passed.
+
 ## Current Test Status
 
 Latest complete backend verification on 2026-11-10:
@@ -213,15 +234,15 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection and consent | 22 |
+| WebSocket streaming, lifecycle, detection, consent and warning triggering | 28 |
 | TTS | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **100** |
+| **Total** | **106** |
 
-Result: **100 passed, 0 failed, 1 non-failing warning.**
+Result: **106 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
 
@@ -258,15 +279,14 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Tested for OTP (4.021s at 0.85) and digital-arrest (25.303s at 0.95); confirmed clear and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 100 passing, 1 non-failing warning |
+| Automated backend tests | 106 passing, 1 non-failing warning |
+| Automatic warning triggering | Implemented and automated-test verified (WebSocket metadata + binary WAV) |
 
 ## Pending Components
 
-1. Frontend consent UI for spoken safety warnings.
-2. Warning-policy integration with WebSocket events.
-3. Automatic Gnani Timbre warning triggering and audio delivery.
-4. Playback cancellation/revocation handling.
-5. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
+1. Frontend consent UI and audio player for spoken safety warnings.
+2. Playback cancellation/revocation handling.
+3. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
 6. Test clean, noisy and telephony-compressed audio.
 7. Complete backend security and API contract review.
 8. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
@@ -291,12 +311,8 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 
 ## Immediate Next Steps
 
-1. Review and commit Stage 4.3 implementation, tests and documentation.
-2. Connect the warning policy to cumulative WebSocket detection.
-3. Define warning deduplication and session state behaviour.
-4. Integrate warning audio delivery with WebSocket streaming.
-5. Implement frontend consent controls and test grant/revoke behaviour end to end.
-6. Review backend security, validation and resource limits.
-7. Evaluate detection against labelled legitimate and scam conversations.
-8. Implement contextual reasoning and explainable risk scoring.
-9. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.
+1. Implement frontend consent controls and audio playback in the dashboard.
+2. Define playback cancellation and revocation protocols (Stage 4.5).
+3. Evaluate detection against labelled legitimate and scam conversations.
+4. Implement contextual reasoning and explainable risk scoring.
+5. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.

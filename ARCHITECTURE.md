@@ -29,7 +29,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 
 ## 3. High-Level Architecture
 
-The current backend provides REST and WebSocket transcription, phrase-based detection, cumulative WebSocket evidence aggregation, a standalone warning policy, session-scoped warning consent and standalone Gnani Timbre TTS endpoints.
+The current backend provides REST and WebSocket transcription, phrase-based detection, cumulative WebSocket evidence aggregation, explainable warning policy, session-scoped warning consent, automated warning triggering and delivery via WebSockets, and standalone Gnani Timbre TTS endpoints.
 
 ```mermaid
 flowchart TD
@@ -46,10 +46,11 @@ flowchart TD
     I --> J[Cumulative detection result]
 
     D --> K[Session-scoped warning consent]
-    J -. Pending integration .-> L[Warning policy]
-    K -. Pending integration .-> L
-    L -. Pending audio orchestration .-> M[Gnani Timbre TTS]
-    M --> N[WAV audio response]
+    J --> L[Warning policy]
+    K --> L
+    L -->|should_speak == True| M[Gnani Timbre TTS]
+    M -->|Binary WAV frame| D
+    L -->|safety_warning metadata| D
 
     O[Standalone client request] --> P1[POST /synthesize-warning]
     O --> P2[POST /synthesize-digital-arrest-warning]
@@ -59,11 +60,9 @@ flowchart TD
 
 REST transcription invokes phrase-based detection and includes its structured result in the response.
 
-WebSocket transcript events receive independent detection results and cumulative `conversation_detection` results. The WebSocket session also maintains a separate consent flag for automatic spoken safety warnings.
+WebSocket transcript events receive independent detection results, cumulative `conversation_detection` results, and explainable `warning_decision` metadata. When cumulative evidence triggers a `WARNING` policy decision and session-scoped consent is granted, digital-arrest safety audio is automatically synthesized via Gnani Timbre in a background thread and dispatched as a JSON metadata event followed by a binary WAV frame.
 
-The warning policy, consent protocol and TTS endpoints exist as separate components. Their end-to-end integration and automatic audio delivery are not yet implemented.
-
-Contextual reasoning, calibrated numerical risk scoring and trusted-family notifications remain planned.
+Standalone warning policy and TTS endpoints remain accessible. Contextual reasoning, calibrated numerical risk scoring and trusted-family notifications remain planned.
 
 ## 4. Current Backend Architecture
 
@@ -184,6 +183,7 @@ The outgoing transcript event contains:
 
 - `detection`: evidence for the current transcript segment.
 - `conversation_detection`: cumulative evidence retained by the connection-scoped `ConversationDetectionAccumulator`.
+- `warning_decision`: evaluation of cumulative evidence using the explainable warning policy (`level`, `should_speak`, `reason_codes`, `matched_rule_ids`, `distinct_stages`).
 
 Invalid or empty transcript text does not interrupt the streaming workflow or add evidence to the accumulator.
 
@@ -200,7 +200,15 @@ The client can send a `warning_consent` command with a strict Boolean `granted` 
 
 Consent resets when the WebSocket connection ends. This protocol controls consent for automatic spoken safety warnings only. It does not represent consent for audio capture, transcription or analysis.
 
-The consent state is not yet connected to the warning policy or TTS playback.
+#### Automated warning triggering and binary audio delivery
+
+When cumulative evidence triggers an escalation to `WARNING` and `warning_consent_enabled` is `True`, the WebSocket pipeline automatically invokes `synthesize_digital_arrest_warning` using `run_in_threadpool`.
+
+Delivery occurs in two parts:
+1. `safety_warning` JSON message containing decision metadata, rule IDs, audio duration, and byte length.
+2. Binary frame containing the raw 16 kHz mono 16-bit linear PCM standard WAV audio.
+
+Deduplication logic (`warning_already_sent`) ensures at most one automatic spoken warning is synthesized and delivered per WebSocket connection. Errors during synthesis emit a `warning_synthesis_error` event without closing or disrupting the ongoing transcription session.
 
 ### 4.5 Standalone Gnani Timbre Text-to-Speech Endpoints
 

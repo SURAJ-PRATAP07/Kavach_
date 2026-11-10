@@ -1,15 +1,24 @@
 
 import asyncio
 import json
+import logging
 import math
+import struct
+import wave
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from app.config import Settings, get_settings
 from app.detection.engine import detect_segments
 from app.detection.schemas import TranscriptSegment
 from app.detection.conversation import ConversationDetectionAccumulator
+from app.detection.warning_policy import evaluate_warning_policy, WarningLevel
+from app.tts import synthesize_digital_arrest_warning, TTSServiceError
 from gnani.stt import GnaniSTTStreamClient
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -134,6 +143,8 @@ async def stream_transcription(
     # Spoken safety warnings require explicit consent.
     # Consent belongs to this WebSocket connection only.
     warning_consent_enabled = False
+    warning_already_sent = False
+    warning_in_progress = False
     stop_requested = asyncio.Event()
     transcript_received_after_stop = asyncio.Event()
     provider_error = asyncio.Event()
@@ -159,7 +170,10 @@ async def stream_transcription(
                 payload, acknowledgement = item
 
                 try:
-                    await websocket.send_json(payload)
+                    if isinstance(payload, bytes):
+                        await websocket.send_bytes(payload)
+                    else:
+                        await websocket.send_json(payload)
                 except BaseException as exc:
                     if (
                         acknowledgement is not None
@@ -200,8 +214,8 @@ async def stream_transcription(
                         RuntimeError("WebSocket writer stopped.")
                     )
 
-    async def enqueue_message(payload: dict, wait_until_sent=False):
-        """Queue a message without leaving acknowledgement waiters hanging."""
+    async def enqueue_message(payload, wait_until_sent=False):
+        """Queue a JSON or binary message for the WebSocket writer."""
 
         if writer_task is None or writer_task.done():
             return False
@@ -233,6 +247,8 @@ async def stream_transcription(
     async def forward_provider_events():
         """Forward provider events and detect provider errors."""
 
+        nonlocal warning_already_sent, warning_in_progress
+
         async for event in client.events():
             payload = serialize_provider_event(event)
 
@@ -244,21 +260,40 @@ async def stream_transcription(
                         [segment]
                     ).model_dump(mode="json")
 
-                    payload["conversation_detection"] = (
+                    cumulative_result = (
                         conversation_detection
                         .add_segment(segment)
-                        .model_dump(mode="json")
+                    )
+                    payload["conversation_detection"] = (
+                        cumulative_result.model_dump(mode="json")
                     )
                 else:
                     payload["detection"] = detect_segments(
                         []
                     ).model_dump(mode="json")
 
-                    payload["conversation_detection"] = (
+                    cumulative_result = (
                         conversation_detection
                         .get_result()
-                        .model_dump(mode="json")
                     )
+                    payload["conversation_detection"] = (
+                        cumulative_result.model_dump(mode="json")
+                    )
+
+                # Evaluate the warning policy against cumulative evidence.
+                decision = evaluate_warning_policy(
+                    cumulative_result,
+                    consent_enabled=warning_consent_enabled,
+                    warning_already_sent=warning_already_sent,
+                )
+
+                payload["warning_decision"] = {
+                    "level": decision.level.value,
+                    "should_speak": decision.should_speak,
+                    "reason_codes": list(decision.reason_codes),
+                    "matched_rule_ids": list(decision.matched_rule_ids),
+                    "distinct_stages": list(decision.distinct_stages),
+                }
 
             if payload["type"] == "error":
                 await enqueue_message(payload, wait_until_sent=True)
@@ -266,6 +301,94 @@ async def stream_transcription(
                 return
 
             await enqueue_message(payload)
+
+            # Trigger automatic spoken warning after the transcript
+            # event has been sent to the browser.
+            if (
+                payload["type"] == "transcript"
+                and decision.should_speak
+                and not warning_in_progress
+            ):
+                warning_in_progress = True
+
+                try:
+                    api_key = settings.gnani_api_key
+
+                    if not api_key or not api_key.strip():
+                        logger.warning(
+                            "Cannot synthesize warning: API key not configured."
+                        )
+                        await enqueue_message({
+                            "type": "warning_synthesis_error",
+                            "message": (
+                                "Could not generate a spoken safety warning. "
+                                "Speech synthesis is not configured."
+                            ),
+                        })
+                        continue
+
+                    audio_bytes = await run_in_threadpool(
+                        synthesize_digital_arrest_warning,
+                        api_key,
+                    )
+
+                    wav_duration_seconds = None
+                    try:
+                        wav_reader = wave.open(BytesIO(audio_bytes), "rb")
+                        wav_duration_seconds = round(
+                            wav_reader.getnframes() / wav_reader.getframerate(),
+                            3,
+                        )
+                        wav_reader.close()
+                    except Exception:
+                        pass
+
+                    await enqueue_message({
+                        "type": "safety_warning",
+                        "level": decision.level.value,
+                        "reason_codes": list(decision.reason_codes),
+                        "matched_rule_ids": list(decision.matched_rule_ids),
+                        "distinct_stages": list(decision.distinct_stages),
+                        "audio_format": "wav",
+                        "audio_bytes": len(audio_bytes),
+                        "audio_duration_seconds": wav_duration_seconds,
+                        "message": (
+                            "Kavach has detected multiple scam indicators "
+                            "in this conversation. A safety warning has "
+                            "been generated."
+                        ),
+                    })
+
+                    # Deliver the actual WAV audio as a binary frame.
+                    await enqueue_message(audio_bytes)
+
+                    warning_already_sent = True
+
+                except TTSServiceError as exc:
+                    logger.warning(
+                        "Warning synthesis failed: %s", exc
+                    )
+                    await enqueue_message({
+                        "type": "warning_synthesis_error",
+                        "message": (
+                            "Could not generate a spoken safety warning. "
+                            "The speech synthesis service reported an error."
+                        ),
+                    })
+
+                except Exception:
+                    logger.exception(
+                        "Unexpected error during warning synthesis."
+                    )
+                    await enqueue_message({
+                        "type": "warning_synthesis_error",
+                        "message": (
+                            "Could not generate a spoken safety warning."
+                        ),
+                    })
+
+                finally:
+                    warning_in_progress = False
 
             if (
                 payload["type"] == "transcript"
