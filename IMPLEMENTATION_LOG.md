@@ -737,3 +737,70 @@ The thresholds have not been evaluated against a labelled dataset.
 ### Git status
 
 Implementation, tests and documentation are awaiting final review and commit/push.
+
+
+---
+
+## Stage 4.2 — Session-scoped spoken-warning consent protocol
+
+**Status:** Implemented and automated-test verified.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Add explicit user control over automatic spoken safety warnings through the existing WebSocket connection.
+
+### Implementation
+
+Updated:
+- `backend/app/streaming.py`
+- `backend/tests/test_streaming.py`
+
+Implemented:
+
+- Consent defaults to disabled.
+- Consent state is local to one WebSocket connection.
+- The ready event reports the initial consent state and session scope.
+- Clients can grant and revoke consent during an active connection.
+- Strict JSON Boolean validation rejects strings, integers, null and missing values.
+- Valid changes receive `warning_consent_updated`.
+- Invalid changes receive `warning_consent_error`.
+- Invalid values do not modify the current consent state.
+- Consent resets after disconnect and reconnect.
+- Existing Stop and unsupported-command handling is preserved.
+
+### Automated tests
+
+Added tests covering:
+
+1. Grant and revoke during one session.
+2. Rejection of the string `"true"`.
+3. Rejection of integer `1`.
+4. Rejection of integer `0`.
+5. Rejection of `null`.
+6. Rejection of a missing `granted` field.
+7. Consent reset after reconnect.
+
+The parameterized invalid-value test contributes four test cases; together with the grant/revoke, missing-field and reconnect tests, there are seven consent-related test cases.
+
+### Verification
+
+- WebSocket streaming suite: 22 passed.
+- Complete backend suite: 95 passed, 0 failed, 1 non-failing warning.
+- Complete suite duration: 10.29 seconds.
+- Targeted WebSocket suite duration: 9.57 seconds.
+- Python compilation: passed.
+- `git diff --check`: passed; Git displayed an informational LF-to-CRLF notice.
+
+### Scope and limitations
+
+This is a backend consent protocol only. It is not yet connected to warning-policy evaluation or TTS playback.
+
+The flag applies only to automatic spoken safety warnings. It does not represent consent for audio capture, transcription or analysis.
+
+Frontend consent controls, automatic warning triggering, audio delivery and playback cancellation/revocation handling remain pending.
+
+### Git status
+
+Stage 4.2 code, tests and documentation are awaiting final review and commit/push.

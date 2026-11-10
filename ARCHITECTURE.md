@@ -29,39 +29,39 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 
 ## 3. High-Level Architecture
 
-The current implementation provides two transcription paths, a REST-integrated phrase-based detection engine, and a standalone Gnani Timbre TTS endpoint.
+The current backend provides REST and WebSocket transcription, phrase-based detection, cumulative WebSocket evidence aggregation, a standalone warning policy, session-scoped warning consent and a standalone Gnani Timbre TTS endpoint.
 
 ```mermaid
 flowchart TD
     A[User audio] --> B[Kavach FastAPI backend]
-
-    B --> C[POST /transcribe]
+    B --> C[REST /transcribe]
     B --> D[WebSocket /ws/transcribe]
-
     C --> E[Gnani Prisma]
     D --> E
+    E --> F[Transcript events]
 
-    E --> F[Transcript output]
+    F --> G[Phrase-based detection]
+    G --> H[Per-event evidence]
+    H --> I[Conversation evidence accumulator]
+    I --> J[Cumulative detection result]
 
-    F --> G[REST transcript normalisation]
-    G --> H[Phrase-based detection engine]
-    H --> I[Four-stage evidence and assessment]
-    I --> J[REST response with detection result]
+    D --> K[Session-scoped warning consent]
+    J -. Pending integration .-> L[Warning policy]
+    K -. Pending integration .-> L
+    L -. Pending audio orchestration .-> M[Gnani Timbre TTS]
+    M --> N[WAV audio response]
 
-    D -. Detection integration pending .-> H
-
-    K[Client request] --> L[POST /synthesize-warning]
-    L --> M[Gnani Timbre v3.0]
-    M --> N[Standard WAV response]
-
-    I -. Automatic warning integration pending .-> L
+    O[Standalone client request] --> P[POST /synthesize-warning]
+    P --> M
 ```
 
-The REST transcription path invokes the phrase-based detection engine after successful transcript validation and returns its structured assessment alongside the transcription response.
+REST transcription invokes phrase-based detection and includes its structured result in the response.
 
-The WebSocket transcription path currently forwards provider transcript events without invoking the detection engine. The standalone TTS endpoint is also independent of the detection workflow.
+WebSocket transcript events receive independent detection results and cumulative `conversation_detection` results. The WebSocket session also maintains a separate consent flag for automatic spoken safety warnings.
 
-Contextual reasoning, numerical risk scoring, automatic warning orchestration and trusted-family notifications remain planned.
+The warning policy, consent protocol and TTS service exist as separate components. Their end-to-end integration and automatic audio delivery are not yet implemented.
+
+Contextual reasoning, calibrated numerical risk scoring and trusted-family notifications remain planned.
 
 ## 4. Current Backend Architecture
 
@@ -173,6 +173,32 @@ Verification:
 - Actual provider events included `ready`, `processing`, `transcript` and `stopped`.
 - The observed transcript contained recognition errors. This verifies connectivity and event delivery, not general recognition accuracy.
 - The latest provider-reported segment latency was 194 ms in one run. This is not an end-to-end latency benchmark.
+
+#### Detection and conversation aggregation
+
+Each valid provider transcript event is independently converted into a `TranscriptSegment` and analysed by the phrase-based detection engine.
+
+The outgoing transcript event contains:
+
+- `detection`: evidence for the current transcript segment.
+- `conversation_detection`: cumulative evidence retained by the connection-scoped `ConversationDetectionAccumulator`.
+
+Invalid or empty transcript text does not interrupt the streaming workflow or add evidence to the accumulator.
+
+#### Session-scoped warning consent
+
+Each WebSocket connection maintains a local `warning_consent_enabled` state, initially `False`.
+
+The ready event exposes:
+
+- `warning_consent_enabled`: initially `false`.
+- `warning_consent_scope`: `session`.
+
+The client can send a `warning_consent` command with a strict Boolean `granted` field. Valid grant/revoke operations are acknowledged; invalid values are rejected without changing the state.
+
+Consent resets when the WebSocket connection ends. This protocol controls consent for automatic spoken safety warnings only. It does not represent consent for audio capture, transcription or analysis.
+
+The consent state is not yet connected to the warning policy or TTS playback.
 
 ### 4.5 Standalone Gnani Timbre Text-to-Speech
 
@@ -326,6 +352,29 @@ The accumulator is in-memory and connection-scoped. It does not persist conversa
 
 This is phrase-based evidence aggregation, not contextual reasoning. Repeated evidence across segments is retained. Cumulative evidence growth is currently unbounded.
 
+### 4.9 Session-scoped warning consent protocol
+
+File: `backend/app/streaming.py`
+
+The WebSocket handler maintains a Boolean consent state for automatic spoken safety warnings.
+
+Protocol:
+
+| Client command | Behaviour |
+|---|---|
+| `{"type": "warning_consent", "granted": true}` | Enables spoken-warning consent for the current session |
+| `{"type": "warning_consent", "granted": false}` | Revokes spoken-warning consent for the current session |
+
+A valid command returns `warning_consent_updated` with the enabled state and session scope.
+
+Invalid values return `warning_consent_error`. Only actual JSON booleans are accepted. Missing fields, strings, integers and null values are rejected.
+
+Consent is initialised to `False` for every WebSocket connection. It does not persist across reconnects.
+
+Automated tests cover granting, revoking, invalid values, a missing consent field and reset on reconnect.
+
+**Important boundary:** This is a backend protocol, not a complete user-facing consent workflow. It is not yet connected to warning-policy evaluation or TTS playback. It applies only to automatic spoken safety warnings, not to audio capture or transcription consent.
+
 ## 5. Detection Architecture and Remaining Work
 
 ### 5.1 Implemented: Phrase-based detection
@@ -394,9 +443,17 @@ The output contains:
 
 Spoken warnings require explicit consent and are suppressed when the caller indicates a warning has already been sent.
 
-The policy does not itself maintain WebSocket session state, trigger TTS, or send audio. These integrations remain pending.
+The policy does not itself maintain WebSocket session state, trigger TTS or send audio. A separate session-scoped WebSocket consent protocol is implemented, but it is not yet connected to policy evaluation or playback.
 
 The thresholds are initial engineering heuristics. They have not been calibrated using a labelled dataset.
+
+### 5.5 Implemented: Session-scoped warning consent protocol
+
+The WebSocket backend implements explicit grant/revoke handling for automatic spoken safety warnings.
+
+Consent defaults to disabled, is scoped to one connection and resets on reconnect. Strict Boolean validation prevents malformed values from enabling consent.
+
+The frontend consent UI, warning-policy integration and audio playback/revocation orchestration remain pending.
 
 ## 6. Planned Safety Response and Integration
 
@@ -419,6 +476,7 @@ The future warning workflow will:
 - Independent detection results attached to individual WebSocket transcript events.
 - Cumulative conversation-level evidence aggregation within each WebSocket connection.
 - Independent explainable warning policy (`evaluate_warning_policy`).
+- Session-scoped WebSocket consent protocol for automatic spoken safety warnings.
 - Standalone Gnani Timbre warning synthesis endpoint.
 
 **Remaining integration work:**
@@ -465,17 +523,17 @@ Latest complete automated verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle and detection | 15 |
+| WebSocket streaming, lifecycle, detection and consent | 22 |
 | TTS service and endpoint | 8 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **88** |
+| **Total** | **95** |
 
-Result: **88 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Result: **95 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
-The WebSocket suite includes four detection-integration tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
+The WebSocket suite includes detection-integration tests, cumulative conversation evidence tests and consent grant/revoke, invalid-value rejection and reconnect reset tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 
 Additional live integration checks:
 - REST transcription: one successful live Hindi request.

@@ -131,6 +131,9 @@ async def stream_transcription(
 
     outgoing = asyncio.Queue()
     conversation_detection = ConversationDetectionAccumulator()
+    # Spoken safety warnings require explicit consent.
+    # Consent belongs to this WebSocket connection only.
+    warning_consent_enabled = False
     stop_requested = asyncio.Event()
     transcript_received_after_stop = asyncio.Event()
     provider_error = asyncio.Event()
@@ -429,6 +432,8 @@ async def stream_transcription(
                 "channels": 1,
                 "encoding": "pcm_s16le",
                 "frame_bytes": FRAME_BYTES,
+                "warning_consent_enabled": False,
+                "warning_consent_scope": "session",
             },
             wait_until_sent=True,
         )
@@ -520,7 +525,46 @@ async def stream_transcription(
                 })
                 continue
 
-            if not isinstance(command, dict) or command.get("type") != "stop":
+            if not isinstance(command, dict):
+                await enqueue_message({
+                    "type": "error",
+                    "message": "Invalid control command. Expected a JSON object.",
+                })
+                continue
+
+            # Handle explicit consent for automatic spoken safety warnings.
+            if command.get("type") == "warning_consent":
+                granted = command.get("granted")
+                # Strict boolean validation:
+                # True and False are accepted.
+                # Strings, integers, null and missing values are rejected.
+                if type(granted) is not bool:
+                    await enqueue_message({
+                        "type": "warning_consent_error",
+                        "message": (
+                            "Invalid consent value. The 'granted' field "
+                            "must be a boolean."
+                        ),
+                        "enabled": warning_consent_enabled,
+                        "scope": "session",
+                    })
+                    continue
+
+                # Update consent only after successful validation.
+                warning_consent_enabled = granted
+                await enqueue_message({
+                    "type": "warning_consent_updated",
+                    "enabled": warning_consent_enabled,
+                    "scope": "session",
+                    "message": (
+                        "Automatic spoken safety warnings enabled."
+                        if warning_consent_enabled
+                        else "Automatic spoken safety warnings disabled."
+                    ),
+                })
+                continue
+
+            if command.get("type") != "stop":
                 await enqueue_message({
                     "type": "error",
                     "message": "Unsupported control command.",

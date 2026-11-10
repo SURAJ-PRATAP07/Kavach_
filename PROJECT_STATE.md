@@ -150,6 +150,32 @@ The policy is a deterministic heuristic, not a calibrated fraud probability or c
 
 **Integration boundary:** The policy is currently an independent Python module. It is not yet connected to WebSocket streaming or automatic Gnani Timbre playback. The caller must maintain session warning state.
 
+**Stage 4.2 — Session-scoped spoken-warning consent protocol: Implemented and automated-test verified**
+
+Added session-scoped consent handling to `backend/app/streaming.py`.
+
+Implemented behaviour:
+
+- Spoken safety-warning consent defaults to `False`.
+- Consent belongs to one WebSocket connection and resets on disconnect/reconnect.
+- The `ready` event reports `warning_consent_enabled: false` and `warning_consent_scope: "session"`.
+- Clients can grant or revoke consent during an active connection using the `warning_consent` control command.
+- Only strict JSON booleans (`true` and `false`) are accepted.
+- Missing values, strings, integers and `null` are rejected without changing the current consent state.
+- Valid changes receive a `warning_consent_updated` acknowledgement.
+- Invalid values receive a `warning_consent_error` response.
+- Existing Stop and unsupported-command handling is preserved.
+
+Consent scope is deliberately limited to automatic spoken safety warnings. This flag does not represent consent for audio capture, transcription or analysis.
+
+**Integration boundary:** This is a backend WebSocket protocol only. A frontend consent UI, warning-policy integration, automatic TTS triggering, audio delivery and playback/revocation handling remain pending.
+
+Automated verification on 2026-11-10:
+- WebSocket streaming tests: 22 passed.
+- Complete backend suite: 95 passed, 0 failed, 1 non-failing warning.
+- Python compilation: passed.
+- `git diff --check`: passed (Git displayed an informational LF-to-CRLF notice).
+
 ## Current Test Status
 
 Latest complete backend verification on 2026-11-10:
@@ -158,35 +184,25 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle and detection | 15 |
+| WebSocket streaming, lifecycle, detection and consent | 22 |
 | TTS | 8 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **88** |
+| **Total** | **95** |
 
-Result: **88 passed, 0 failed, 1 non-failing warning.**
+Result: **95 passed, 0 failed, 1 non-failing warning.**
 
 Environment: Windows, Python 3.11.9, pytest 8.4.2.
 
 Additional verification:
-- Python compilation using `python -m compileall`: passed.
-- `git diff --check`: passed.
+- Python compilation using `python -m compileall -q backend\app backend\tests`: passed.
+- `git diff --check`: passed; Git displayed an informational LF-to-CRLF notice.
 
-The WebSocket suite includes four detection-integration tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
+The WebSocket tests include per-event detection, cumulative conversation evidence, session-scoped consent grant/revoke, invalid consent rejection and consent reset after reconnect.
 
-Live integration checks:
-- REST transcription: verified with one real Hindi audio recording.
-- WebSocket transcription: verified with one Hindi recording through the actual Gnani Prisma streaming service.
-- TTS endpoint: HTTP 200; playback of two warning segments confirmed complete and understandable.
-- REST detection integration: automated tests verify the response structure and a detected scam signal using mocked provider responses.
-- WebSocket detection integration: automated tests verify per-event detection using mocked transcript events.
-- Detection-engine unit tests: selected Devanagari phrases across all four scam stages successfully matched. These are local rule-engine tests, not live Gnani integration tests.
-
-The live WebSocket transcription verification does not establish live scam-detection accuracy. No labelled real-world scam conversation has yet been evaluated.
-
-Mocked provider tests are distinct from live integration checks. These results do not establish broad transcription accuracy, TTS quality or real-world scam-detection accuracy.
+Provider tests use mocked Gnani clients. Live integration checks remain separate from automated tests.
 
 The existing Starlette/httpx deprecation warning is non-failing and remains under investigation.
 
@@ -203,31 +219,34 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Scam-detection data schemas | Implemented and tested (8 tests) |
 | Phrase-based scam detection engine | Implemented and tested (31 tests) |
 | REST transcription-to-detection integration | Implemented and automated-test verified |
-| WebSocket transcript-event-to-detection integration | Implemented and automated-test verified |
+| WebSocket streaming per-event detection and cumulative conversation evidence | Implemented and automated-test verified |
 | Conversation-level cumulative detection | Implemented and automated-test verified |
 | Explainable warning policy | Implemented and tested (11 tests) |
+| Session-scoped spoken-warning consent protocol | Implemented and tested (7 consent tests) |
 | Contextual and hybrid scam detection | Pending |
 | Calibrated explainable risk scoring | Pending |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 88 passing, 1 non-failing warning |
+| Automated backend tests | 95 passing, 1 non-failing warning |
 
 ## Pending Components
 
-1. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
-2. Test clean, noisy and telephony-compressed audio.
-3. Complete backend security and API contract review.
-4. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
-5. Implement contextual reasoning and hybrid detection.
-6. Implement explainable and calibrated risk scoring.
-7. Design and implement warning prioritisation and triggering policy.
-8. Integrate automatic Gnani Timbre warning delivery with detection and WebSocket streaming.
-9. Implement consent-based trusted-family notifications.
-10. Implement incident summaries for cybercrime reporting.
-11. Develop Kavach-Bench.
-12. Build the responsive frontend dashboard.
-13. Complete end-to-end, privacy, performance and deployment testing.
+1. Frontend consent UI for spoken safety warnings.
+2. Warning-policy integration with WebSocket events.
+3. Automatic Gnani Timbre warning triggering and audio delivery.
+4. Playback cancellation/revocation handling.
+5. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
+6. Test clean, noisy and telephony-compressed audio.
+7. Complete backend security and API contract review.
+8. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
+9. Implement contextual reasoning and hybrid detection.
+10. Implement explainable and calibrated risk scoring.
+11. Implement consent-based trusted-family notifications.
+12. Implement incident summaries for cybercrime reporting.
+13. Develop Kavach-Bench.
+14. Build the responsive frontend dashboard.
+15. Complete end-to-end, privacy, performance and deployment testing.
 
 ## Important Engineering Constraints
 
@@ -242,11 +261,13 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 
 ## Immediate Next Steps
 
-1. Complete documentation review and GitHub push for Stage 3 (conversation-level detection).
-2. Review backend security, validation and resource limits.
-3. Evaluate detection rules against labelled scam and legitimate conversations.
-4. Design a safe warning policy and integrate the verified TTS service.
-5. Implement contextual reasoning and explainable risk scoring.
-6. Build the frontend and consent workflow.
-7. Add family notifications, incident summaries and Kavach-Bench.
-8. Complete end-to-end testing, deployment and the hackathon demonstration.
+1. Review and commit Stage 4.2 implementation, tests and documentation.
+2. Connect the warning policy to cumulative WebSocket detection.
+3. Define warning deduplication and session state behaviour.
+4. Implement general-purpose Hindi safety-warning content and verify it through Gnani Timbre.
+5. Integrate warning audio delivery with WebSocket streaming.
+6. Implement frontend consent controls and test grant/revoke behaviour end to end.
+7. Review backend security, validation and resource limits.
+8. Evaluate detection against labelled legitimate and scam conversations.
+9. Implement contextual reasoning and explainable risk scoring.
+10. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.

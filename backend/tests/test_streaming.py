@@ -190,6 +190,8 @@ def test_websocket_stream_and_stop(configured_client):
         assert ready["sample_rate"] == 16000
         assert ready["frame_bytes"] == 1024
         assert ready["encoding"] == "pcm_s16le"
+        assert ready["warning_consent_enabled"] is False
+        assert ready["warning_consent_scope"] == "session"
 
         audio_frame = b"\x01" * 1024
         websocket.send_bytes(audio_frame)
@@ -555,3 +557,125 @@ def test_websocket_includes_cumulative_conversation_detection(
         cumulative_threats["evidence"][0]["segment_id"]
         == "conversation-segment-1"
     )
+
+
+
+def test_websocket_can_grant_and_revoke_warning_consent(
+    configured_client,
+):
+    """Consent can be enabled and revoked during one session."""
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as websocket:
+        ready = websocket.receive_json()
+        assert ready["type"] == "ready"
+        assert ready["warning_consent_enabled"] is False
+
+        # Grant consent.
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        granted = websocket.receive_json()
+        assert granted["type"] == "warning_consent_updated"
+        assert granted["enabled"] is True
+        assert granted["scope"] == "session"
+
+        # Revoke consent.
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": False,
+        }))
+        revoked = websocket.receive_json()
+        assert revoked["type"] == "warning_consent_updated"
+        assert revoked["enabled"] is False
+        assert revoked["scope"] == "session"
+
+        websocket.close()
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+
+@pytest.mark.parametrize(
+    "invalid_granted",
+    ["true", 1, 0, None],
+)
+def test_websocket_rejects_non_boolean_warning_consent(
+    configured_client,
+    invalid_granted,
+):
+    """Only strict booleans can change consent."""
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as websocket:
+        ready = websocket.receive_json()
+        assert ready["type"] == "ready"
+        assert ready["warning_consent_enabled"] is False
+
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": invalid_granted,
+        }))
+        error = websocket.receive_json()
+        assert error["type"] == "warning_consent_error"
+        assert error["enabled"] is False
+        assert error["scope"] == "session"
+
+        websocket.close()
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+def test_websocket_rejects_missing_warning_consent_value(
+    configured_client,
+):
+    """A consent command without 'granted' must not enable consent."""
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as websocket:
+        ready = websocket.receive_json()
+        assert ready["type"] == "ready"
+        assert ready["warning_consent_enabled"] is False
+
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+        }))
+
+        error = websocket.receive_json()
+        assert error["type"] == "warning_consent_error"
+        assert error["enabled"] is False
+        assert error["scope"] == "session"
+
+        websocket.close()
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(
+            timeout=2.0
+        )
+
+def test_websocket_warning_consent_resets_on_reconnect(
+    configured_client,
+):
+    """Consent belongs to one connection and resets when reconnecting."""
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as first_session:
+        first_ready = first_session.receive_json()
+        assert first_ready["warning_consent_enabled"] is False
+
+        first_session.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        first_granted = first_session.receive_json()
+        assert first_granted["type"] == "warning_consent_updated"
+        assert first_granted["enabled"] is True
+
+        first_session.close()
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)
+
+    # Reconnect and ensure consent is back to disabled.
+    with configured_client.websocket_connect(
+        "/ws/transcribe"
+    ) as second_session:
+        second_ready = second_session.receive_json()
+        assert second_ready["type"] == "ready"
+        assert second_ready["warning_consent_enabled"] is False
+
+        second_session.close()
+        FakeGnaniStreamClient.instances[-1].cleanup_event.wait(timeout=2.0)

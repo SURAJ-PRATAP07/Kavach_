@@ -720,3 +720,82 @@ One non-failing Starlette deprecation warning concerns using `httpx` with `starl
 These tests establish deterministic policy behaviour for the tested evidence combinations. They do not establish real-world scam-detection accuracy or validate the policy thresholds against a labelled dataset.
 
 Automatic WebSocket warning orchestration, session-state management and Gnani Timbre audio delivery are not yet implemented.
+
+
+---
+
+## Test Report — Stage 4.2 Session-scoped Warning Consent Protocol
+
+**Date:** 2026-11-10
+
+### Environment
+
+- Operating system: Windows
+- Python: 3.11.9
+- pytest: 8.4.2
+- Virtual environment: `backend/.venv`
+
+### New and updated tests
+
+File: `backend/tests/test_streaming.py`
+
+Consent-related coverage:
+
+| Test case | Expected behaviour | Result |
+|---|---|---|
+| Grant and revoke consent | Both valid Boolean values update session state and receive acknowledgements | PASS |
+| String `"true"` | Rejected; consent remains disabled | PASS |
+| Integer `1` | Rejected; consent remains disabled | PASS |
+| Integer `0` | Rejected; consent remains disabled | PASS |
+| `null` | Rejected; consent remains disabled | PASS |
+| Missing `granted` field | Rejected; consent remains disabled | PASS |
+| Reconnect | New connection starts with consent disabled | PASS |
+
+The existing ready-event test also verifies that the initial consent state is disabled and its scope is `session`.
+
+### Targeted WebSocket test results
+
+| Metric | Result |
+|---|---:|
+| Passed | 22 |
+| Failed | 0 |
+| Warnings | 1 |
+| Duration | 9.57 seconds |
+
+### Complete backend test results
+
+| Test group | Passed |
+|---|---:|
+| Health endpoint | 1 |
+| REST transcription | 10 |
+| WebSocket streaming, lifecycle, detection and consent | 22 |
+| TTS | 8 |
+| Detection schemas | 8 |
+| Detection engine | 31 |
+| Conversation detection | 4 |
+| Warning policy | 11 |
+| **Total** | **95** |
+
+Result: **95 passed, 0 failed, 1 non-failing warning.**
+
+Complete suite duration: 10.29 seconds.
+
+### Additional verification
+
+- `python -m compileall -q backend\app backend\tests`: passed.
+- `git diff --check`: passed.
+- Git displayed an informational LF-to-CRLF line-ending notice for `backend/tests/test_streaming.py`.
+
+### Warning
+
+One non-failing Starlette deprecation warning concerns using `httpx` with `starlette.testclient`. It does not currently cause test failures.
+
+### Limitations
+
+These tests verify backend WebSocket consent protocol behaviour. They do not verify a frontend consent interface or end-to-end user interaction.
+
+The consent state is not yet connected to warning-policy evaluation, automatic TTS triggering or audio playback.
+
+The consent flag applies only to automatic spoken safety warnings. It does not establish consent for audio capture, transcription or analysis.
+
+No real-world scam-detection accuracy or warning effectiveness is established by these tests.
