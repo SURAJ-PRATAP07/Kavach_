@@ -8,13 +8,13 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2 + Detection Integrations: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, and REST/WebSocket detection integrations.**
+**Milestones 0–4.2 + Detection Integrations + Stage 3: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, and conversation-level evidence aggregation.**
 
 Currently implemented and verified:
 
 - FastAPI backend and health-check endpoint.
 - Gnani Prisma v2.5 REST transcription integration with detection assessments.
-- Gnani Prisma WebSocket streaming integration with per-event detection assessments, live-verified with one Hindi recording.
+- Gnani Prisma WebSocket streaming integration with per-event detection assessments and cumulative conversation-level evidence aggregation, live-verified with one Hindi recording.
 - Hindi transcription configuration (`hi-IN`).
 - Audio upload validation and application-level 10 MB upload limit.
 - Provider error and timeout handling.
@@ -23,11 +23,12 @@ Currently implemented and verified:
 - Initial phrase-based detection for impersonation, threats, isolation and financial extraction.
 - Selected English, romanized Hindi/Hinglish and Devanagari phrase patterns.
 - Explainable detection evidence with rule IDs, matched phrases, reasons and available transcript metadata.
-- Automated backend tests: **72 passed, 0 failed, 1 non-failing deprecation warning**.
+- `ConversationDetectionAccumulator`: connection-scoped cumulative phrase-based evidence aggregation across WebSocket transcript events.
+- Automated backend tests: **77 passed, 0 failed, 1 non-failing deprecation warning**.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** cumulative conversation-level detection across events, contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions and triggering through Gnani Timbre, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, automatic warning decisions and triggering through Gnani Timbre, trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
 
 The TTS endpoint is standalone and is not automatically triggered by detection.
 
@@ -62,12 +63,12 @@ Consented audio input (REST / WebSocket)
         |                  |
         |                  v
         |          Explainable stage evidence
+        |                  |
+        |                  v
+        |   ConversationDetectionAccumulator (WebSocket cumulative evidence)
         |
         v
- Future cumulative conversation-level & contextual detection
-        |
-        v
- Future calibrated risk scoring & warning policy
+ Future contextual detection & calibrated risk scoring & warning policy
         |
         +------> Gnani Timbre TTS (Standalone endpoint verified)
         |
@@ -77,7 +78,7 @@ Consented audio input (REST / WebSocket)
  Future incident summary
 `
 
-The phrase-based detection engine is integrated with both REST transcription and WebSocket streaming (analysing each transcript event independently). The standalone TTS endpoint is also implemented. Cumulative conversation-level detection, contextual reasoning, calibrated risk scoring, automated warning delivery, notifications and incident summaries remain planned.
+The phrase-based detection engine is integrated with both REST transcription and WebSocket streaming. Each WebSocket transcript event receives both an independent \detection\ result and a cumulative \conversation_detection\ result via \ConversationDetectionAccumulator\. The standalone TTS endpoint is also implemented. Contextual reasoning, calibrated risk scoring, automated warning delivery, notifications and incident summaries remain planned.
 
 ## Technology stack
 
@@ -109,6 +110,7 @@ Kavach/
 |   |       |-- schemas.py
 |   |       |-- rules.py
 |   |       |-- engine.py
+|   |       |-- conversation.py
 |   |
 |   |-- tests/
 |   |   |-- test_health.py
@@ -117,6 +119,7 @@ Kavach/
 |   |   |-- test_tts.py
 |   |   |-- test_detection_schemas.py
 |   |   |-- test_detection_engine.py
+|   |   |-- test_conversation_detection.py
 |   |
 |   |-- .env.example
 |   |-- requirements.txt
@@ -258,21 +261,21 @@ The engine supports selected English, romanized Hindi/Hinglish and Devanagari Hi
 Detection is integrated with both transcription workflows:
 
 - REST: detection results are included in the /transcribe response.
-- WebSocket: each transcript event receives an independent structured detection result.
+- WebSocket: each transcript event receives an independent structured detection result and a cumulative `conversation_detection` result aggregating evidence across all valid segments in that connection.
 
 The system preserves matched phrases, original transcript text, rule identifiers, explanations, qualitative signal strengths and available segment metadata.
 
-**Current limitations:** Detection is phrase-based, not general contextual understanding. WebSocket events are not yet combined into a cumulative conversation-level assessment. Signal strengths are qualitative rather than calibrated probabilities. Automatic warning triggering is not yet integrated.
+**Current limitations:** Detection remains phrase-based. Cumulative WebSocket evidence is aggregated within a single connection, but the system does not perform contextual conversation understanding or calculate calibrated probabilities. Automatic warning triggering is not yet integrated.
 
 ### Automated testing
 
 Latest complete backend verification on 2026-11-10:
 
-- 72 tests passed.
+- 77 tests passed.
 - 0 tests failed.
 - 1 non-failing deprecation warning.
 
-The WebSocket test group includes 14 tests covering streaming, lifecycle handling and per-event detection integration.
+The WebSocket test group includes 15 tests covering streaming, lifecycle handling, per-event detection integration, and cumulative conversation-level detection.
 
 Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis.
 
@@ -288,7 +291,7 @@ The project maintains:
 - ARCHITECTURE.md — System architecture and design decisions.
 - IMPLEMENTATION_LOG.md — Development history.
 
-The 72 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
+The 77 passing automated backend tests do not establish real-world scam detection accuracy. Systematic accuracy, noisy-audio and false-positive evaluations remain pending.
 
 ## Privacy and responsible use
 
@@ -313,7 +316,7 @@ The 72 passing automated backend tests do not establish real-world scam detectio
 - [x] Initial standalone phrase-based scam-stage detection.
 - [x] REST transcription-to-detection integration.
 - [x] Real-time WebSocket transcript-event-to-detection integration.
-- [ ] Cumulative conversation-level detection across events.
+- [x] Cumulative conversation-level evidence aggregation (WebSocket, per-connection).
 - [ ] Contextual scam-stage detection and improved negation/context handling.
 - [ ] Evaluation against labelled legitimate and scam conversations.
 - [ ] Risk scoring and warning policy.

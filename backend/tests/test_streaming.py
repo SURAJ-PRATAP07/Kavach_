@@ -507,3 +507,51 @@ def test_websocket_handles_sdk_constructor_failure(
 
         with pytest.raises(WebSocketDisconnect):
             websocket.receive_json()
+
+def test_websocket_includes_cumulative_conversation_detection(
+    configured_client,
+):
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent(
+            text="You will be arrested.",
+            segment_id="conversation-segment-1",
+            segment_index=0,
+        ),
+        StreamTranscriptEvent(
+            text="Namaste, yeh ek test hai.",
+            segment_id="conversation-segment-2",
+            segment_index=1,
+        ),
+    ]
+
+    transcripts = receive_streaming_transcripts(configured_client)
+
+    assert len(transcripts) == 2
+
+    # Each transcript retains independent detection.
+    assert transcripts[0]["detection"]["segments_analyzed"] == 1
+    assert transcripts[1]["detection"]["segments_analyzed"] == 1
+
+    second_event_threats = next(
+        assessment
+        for assessment in transcripts[1]["detection"]["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+    assert second_event_threats["evidence"] == []
+
+    # Cumulative detection includes both transcript segments.
+    cumulative = transcripts[1]["conversation_detection"]
+
+    assert cumulative["segments_analyzed"] == 2
+
+    cumulative_threats = next(
+        assessment
+        for assessment in cumulative["stage_assessments"]
+        if assessment["stage"] == "threats"
+    )
+
+    assert len(cumulative_threats["evidence"]) == 1
+    assert (
+        cumulative_threats["evidence"][0]["segment_id"]
+        == "conversation-segment-1"
+    )

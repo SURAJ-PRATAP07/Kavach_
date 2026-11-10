@@ -613,3 +613,50 @@ Stage 2 WebSocket detection integration is implemented and automated-test verifi
 The backend can now attach an independent structured detection result to each WebSocket transcript event.
 
 Cumulative conversation-level detection, contextual reasoning, calibrated risk scoring, automatic TTS warning delivery and evaluation against labelled conversations remain pending.
+
+
+---
+
+## Test Report — Stage 3 Conversation-level Evidence Aggregation
+
+**Date:** 2026-11-10
+
+**Milestone:** Stage 3
+
+### Environment
+
+- Operating system: Windows
+- Python: 3.11.9
+- pytest: 8.4.2
+
+### New tests
+
+`backend/tests/test_conversation_detection.py`:
+
+- `test_accumulator_collects_evidence_across_segments`
+- `test_accumulator_preserves_evidence_from_repeated_segments`
+- `test_accumulator_keeps_harmless_segments_without_evidence`
+- `test_accumulators_are_isolated_between_sessions`
+
+`backend/tests/test_streaming.py`:
+
+- `test_websocket_includes_cumulative_conversation_detection`
+
+### Full suite results
+
+| Metric | Result |
+|---|---:|
+| Passed | 77 |
+| Failed | 0 |
+| Warnings | 1 |
+| Duration | 10.03 seconds |
+
+Compilation using `python -m compileall -q backend\app backend\tests` completed successfully.
+
+### Limitations
+
+These tests verify implementation behaviour, not real-world scam-detection accuracy.
+
+They do not establish contextual understanding, calibrated risk probabilities, precision, recall, false-positive rate or false-negative rate.
+
+The cumulative accumulator is in-memory and connection-scoped. It does not persist data across reconnects.

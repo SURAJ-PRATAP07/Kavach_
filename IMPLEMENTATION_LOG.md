@@ -537,7 +537,9 @@ The pilot evaluation dataset remains empty and has not been used to calculate de
 
 ## Stage 2 — WebSocket streaming and detection integration
 
-**Status:** Implemented and automated-test verified; Git commit and push pending.
+**Status:** Implemented, automated-test verified, committed and pushed.
+
+**Commit:** `5bf6c30` — `feat: integrate scam detection with streaming transcripts`
 
 **Date:** 2026-11-10
 
@@ -617,3 +619,69 @@ The existing phrase-based detection limitations remain applicable. No precision,
 ### Repository status
 
 The implementation, tests and documentation updates are awaiting final staged-diff review and Git commit/push.
+
+---
+
+## Stage 3 — Conversation-level evidence aggregation
+
+**Status:** Implemented and automated-test verified; commit pending.
+
+**Date:** 2026-11-10
+
+### Objective
+
+Retain phrase-based scam evidence across transcript events belonging to one WebSocket connection, while preserving independent per-event detection.
+
+### Implementation
+
+Added `backend/app/detection/conversation.py`.
+
+Implemented `ConversationDetectionAccumulator` with:
+
+- Connection-scoped evidence storage.
+- Cumulative segment counting.
+- Stage-wise evidence aggregation.
+- Cumulative `DetectionResult` generation.
+
+Updated `backend/app/streaming.py`:
+
+- Creates one accumulator per WebSocket connection.
+- Preserves independent detection for each transcript event.
+- Adds `conversation_detection` to transcript events.
+- Leaves cumulative evidence unchanged for invalid or empty transcript text.
+
+### Automated tests
+
+Added `backend/tests/test_conversation_detection.py` covering:
+
+1. Evidence aggregation across segments.
+2. Retention of repeated evidence.
+3. Harmless segments.
+4. Isolation between accumulator instances.
+
+Updated `backend/tests/test_streaming.py` to verify cumulative evidence in WebSocket events.
+
+### Verification
+
+- Full suite: 77 passed.
+- Failures: 0.
+- Warnings: 1 non-failing deprecation warning.
+- Python: 3.11.9.
+- pytest: 8.4.2.
+- Runtime: 10.03 seconds.
+- `compileall`: successful.
+- `git diff --cached --check`: successful.
+
+### Limitations
+
+- Phrase-based aggregation, not contextual AI reasoning.
+- No calibrated numerical risk score.
+- No persistence across connections or reconnects.
+- Repeated evidence is retained.
+- Cumulative evidence growth is currently unbounded.
+- No real-world accuracy, precision, recall, FPR or FNR established.
+- Automatic warning delivery is not implemented.
+
+### Git status
+
+Stage 3 implementation and tests are staged locally. Documentation changes and final commit/push remain pending.

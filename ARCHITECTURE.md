@@ -299,11 +299,32 @@ The engine is integrated with both the REST transcription endpoint and WebSocket
 
 For REST, detection runs after successful transcript validation and is included in the transcription response.
 
-For WebSocket streaming, each transcript event is independently analysed and forwarded with its own structured detection result. Available source and segment metadata are preserved.
+For WebSocket streaming, each transcript event receives an independent detection result and a cumulative `conversation_detection` result. The cumulative result retains phrase-based evidence from valid transcript segments processed during the current connection.
 
-Neither integration currently performs cumulative conversation-level analysis. Automatic Timbre warning triggering remains pending.
+Neither integration currently performs general contextual understanding or calculates a calibrated numerical risk score. Automatic Timbre warning triggering remains pending.
 
 Automated verification: 31 detection-engine tests passed. See `TEST_REPORT.md`.
+
+### 4.8 Conversation-level evidence aggregation
+
+File: `backend/app/detection/conversation.py`
+
+The WebSocket streaming workflow creates one `ConversationDetectionAccumulator` per connection.
+
+For each valid transcript event:
+
+1. The event is validated and converted into a `TranscriptSegment`.
+2. Independent detection runs on that segment.
+3. The accumulator runs detection on the segment and retains its evidence.
+4. The outgoing event includes both `detection` and `conversation_detection`.
+
+The independent result describes only the current segment. The cumulative result describes all valid segments processed by that connection so far.
+
+Empty or invalid transcript text does not interrupt streaming and does not change the cumulative evidence.
+
+The accumulator is in-memory and connection-scoped. It does not persist conversations or carry evidence across reconnects.
+
+This is phrase-based evidence aggregation, not contextual reasoning. Repeated evidence across segments is retained. Cumulative evidence growth is currently unbounded.
 
 ## 5. Detection Architecture and Remaining Work
 
@@ -317,9 +338,9 @@ Its current limitations include incomplete phrase coverage and limited handling 
 
 The engine is invoked by both the REST transcription endpoint and the WebSocket streaming workflow.
 
-For REST, its structured detection result is returned alongside the transcription response. For WebSocket streaming, each transcript event receives an independent detection result.
+For REST, its structured detection result is returned alongside the transcription response. For WebSocket streaming, each transcript event receives an independent detection result and a cumulative `conversation_detection` result. The cumulative result retains phrase-based evidence from valid transcript segments processed during the current connection.
 
-This integration does not yet combine evidence across transcript events or calculate a conversation-level risk score.
+This integration does not perform general contextual understanding or calculate a calibrated conversation-level risk score.
 
 ### 5.2 Planned: Contextual detection
 
@@ -362,17 +383,17 @@ The future warning workflow will:
 - WebSocket transcript-event-to-detection integration.
 - Structured evidence generation for four scam stages.
 - Independent detection results attached to individual WebSocket transcript events.
+- Cumulative conversation-level evidence aggregation within each WebSocket connection.
 - Standalone Gnani Timbre warning synthesis endpoint.
 
 **Remaining integration work:**
 
-1. Add cumulative conversation-level analysis across transcript events.
-2. Add contextual reasoning to assess conversational meaning.
-3. Implement explainable risk scoring and validate thresholds using labelled data.
-4. Define a safe warning policy.
-5. Integrate detection-triggered warning delivery through Gnani Timbre.
-6. Implement consent-based trusted-family notifications.
-7. Generate incident summaries supporting cybercrime reporting.
+1. Add contextual reasoning to assess conversational meaning.
+2. Implement explainable risk scoring and validate thresholds using labelled data.
+3. Define a safe warning policy.
+4. Integrate detection-triggered warning delivery through Gnani Timbre.
+5. Implement consent-based trusted-family notifications.
+6. Generate incident summaries supporting cybercrime reporting.
 
 Automatic detection-to-warning orchestration is not yet implemented.
 
@@ -400,6 +421,7 @@ Current test files:
 - `test_tts.py`
 - `test_detection_schemas.py`
 - `test_detection_engine.py`
+- `test_conversation_detection.py`
 
 Latest complete automated verification on 2026-11-10:
 
@@ -407,13 +429,14 @@ Latest complete automated verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle and detection | 14 |
+| WebSocket streaming, lifecycle and detection | 15 |
 | TTS service and endpoint | 8 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
-| **Total** | **72** |
+| Conversation detection | 4 |
+| **Total** | **77** |
 
-Result: **72 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Result: **77 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
 
 The WebSocket suite includes four detection-integration tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 
@@ -454,6 +477,7 @@ Kavach/
 |   |       +-- schemas.py
 |   |       +-- rules.py
 |   |       +-- engine.py
+|   |       +-- conversation.py
 |   |
 |   +-- tests/
 |   |   +-- test_transcribe.py
@@ -461,6 +485,7 @@ Kavach/
 |   |   +-- test_tts.py
 |   |   +-- test_detection_schemas.py
 |   |   +-- test_detection_engine.py
+|   |   +-- test_conversation_detection.py
 |   |
 |   +-- .env.example
 |   +-- requirements.txt

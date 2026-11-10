@@ -123,7 +123,7 @@ The engine currently:
 
 The WebSocket integration handles empty or invalid transcript text without allowing detection to interrupt the streaming workflow. Automated tests cover scam-signal detection, harmless transcripts, metadata preservation and independent analysis of multiple transcript events.
 
-**Current integration boundary:** Detection is performed independently for each transcript event. Evidence is not yet accumulated across events, and no conversation-level risk assessment is produced. Automatic Gnani Timbre warning triggering is also pending.
+**Current integration boundary:** Each WebSocket transcript event receives an independent detection result and a cumulative `conversation_detection` result. A connection-scoped `ConversationDetectionAccumulator` retains phrase-based evidence across transcript events within that WebSocket session. This is evidence aggregation, not contextual conversation understanding or a calibrated conversation-level risk assessment. Automatic Gnani Timbre warning triggering remains pending.
 
 **Limitations:** Phrase matching is not general contextual understanding. Negation, reported speech, speaker identity and legitimate conversational context are not comprehensively interpreted. No real-world detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
 
@@ -135,15 +135,17 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle and detection | 14 |
-| TTS service and endpoint | 8 |
+| WebSocket streaming, lifecycle and detection | 15 |
+| TTS | 8 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
-| **Total** | **72** |
+| Conversation detection | 4 |
+| **Total** | **77** |
 
-Result: **72 passed, 0 failed, 1 non-failing warning.**
+Result: **77 passed, 0 failed, 1 non-failing warning.**
 
-The latest reported full-suite run completed in 6.39 seconds.
+Environment: Windows, Python 3.11.9, pytest 8.4.2.
+Execution time: 10.03 seconds.
 
 Additional verification:
 - Python compilation using `python -m compileall`: passed.
@@ -179,30 +181,29 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Phrase-based scam detection engine | Implemented and tested (31 tests) |
 | REST transcription-to-detection integration | Implemented and automated-test verified |
 | WebSocket transcript-event-to-detection integration | Implemented and automated-test verified |
-| Conversation-level cumulative detection | Pending |
+| Conversation-level cumulative detection | Implemented and automated-test verified |
 | Contextual and hybrid scam detection | Pending |
 | Calibrated explainable risk scoring | Pending |
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Two tested segments confirmed complete and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 72 passing, 1 non-failing warning |
+| Automated backend tests | 77 passing, 1 non-failing warning |
 
 ## Pending Components
 
 1. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
 2. Test clean, noisy and telephony-compressed audio.
 3. Complete backend security and API contract review.
-4. Implement cumulative conversation-level detection across transcript events.
-5. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
-6. Implement contextual reasoning and hybrid detection.
-7. Implement explainable and calibrated risk scoring.
-8. Design and implement warning prioritisation and triggering policy.
-9. Integrate automatic Gnani Timbre warning delivery with detection and WebSocket streaming.
-10. Implement consent-based trusted-family notifications.
-11. Implement incident summaries for cybercrime reporting.
-12. Develop Kavach-Bench.
-13. Build the responsive frontend dashboard.
-14. Complete end-to-end, privacy, performance and deployment testing.
+4. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
+5. Implement contextual reasoning and hybrid detection.
+6. Implement explainable and calibrated risk scoring.
+7. Design and implement warning prioritisation and triggering policy.
+8. Integrate automatic Gnani Timbre warning delivery with detection and WebSocket streaming.
+9. Implement consent-based trusted-family notifications.
+10. Implement incident summaries for cybercrime reporting.
+11. Develop Kavach-Bench.
+12. Build the responsive frontend dashboard.
+13. Complete end-to-end, privacy, performance and deployment testing.
 
 ## Important Engineering Constraints
 
@@ -217,12 +218,11 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 
 ## Immediate Next Steps
 
-1. Complete documentation review and GitHub verification for the WebSocket detection integration.
+1. Complete documentation review and GitHub push for Stage 3 (conversation-level detection).
 2. Review backend security, validation and resource limits.
-3. Implement cumulative conversation-level detection.
-4. Evaluate detection rules against labelled scam and legitimate conversations.
+3. Evaluate detection rules against labelled scam and legitimate conversations.
+4. Design a safe warning policy and integrate the verified TTS service.
 5. Implement contextual reasoning and explainable risk scoring.
-6. Define a safe warning policy and integrate the verified TTS service.
-7. Build the frontend and consent workflow.
-8. Add family notifications, incident summaries and Kavach-Bench.
-9. Complete end-to-end testing, deployment and the hackathon demonstration.
+6. Build the frontend and consent workflow.
+7. Add family notifications, incident summaries and Kavach-Bench.
+8. Complete end-to-end testing, deployment and the hackathon demonstration.
