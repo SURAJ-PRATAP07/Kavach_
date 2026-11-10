@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink-950: #05080f;
+  --color-ink-900: #0a0f1c;
+  --color-ink-850: #0e1525;
+  --color-ink-800: #121b2f;
+  --color-ink-700: #1b2640;
+  --color-ink-600: #26334f;
+  --color-ink-400: #6b7a96;
+  --color-ink-300: #93a1bb;
+  --color-ink-100: #dbe3f1;
+
+  --color-brand-300: #6ee7c8;
+  --color-brand-400: #2dd4aa;
+  --color-brand-500: #14b892;
+  --color-brand-600: #0e9677;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-ink-950 text-ink-100 antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection {
+    @apply bg-brand-500/30;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-700) transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-ink-700/70 bg-ink-900/80 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset];
+  }
+  .card-pad {
+    @apply p-5 sm:p-6;
+  }
+  .label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400;
+  }
+  .btn-primary {
+    @apply bg-brand-500 text-ink-950 hover:bg-brand-400;
+  }
+  .btn-danger {
+    @apply bg-rose-500 text-white hover:bg-rose-400;
+  }
+  .btn-ghost {
+    @apply border border-ink-700 bg-ink-850 text-ink-100 hover:border-ink-600 hover:bg-ink-800;
+  }
+  .input {
+    @apply w-full rounded-xl border border-ink-700 bg-ink-850 px-3.5 py-2.5 text-sm text-ink-100 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  80%, 100% { transform: scale(1.8); opacity: 0; }
+}
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulse-ring 1.8s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.28s ease-out both;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 0.45s ease-in-out;
+}
+
+@media print {
+  body { background: white; color: black; }
+  .no-print { display: none !important; }
+}
+
+/* Let grid children shrink so long text truncates instead of widening the page. */
+main .grid > * {
+  min-width: 0;
+}

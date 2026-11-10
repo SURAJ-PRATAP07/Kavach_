@@ -123,7 +123,7 @@ The engine currently:
 
 The WebSocket integration handles empty or invalid transcript text without allowing detection to interrupt the streaming workflow. Automated tests cover scam-signal detection, harmless transcripts, metadata preservation and independent analysis of multiple transcript events.
 
-**Current integration boundary:** Each WebSocket transcript event receives an independent detection result and a cumulative `conversation_detection` result. A connection-scoped `ConversationDetectionAccumulator` retains phrase-based evidence across transcript events within that WebSocket session. The warning policy evaluates cumulative evidence per transcript event, and when a qualifying WARNING decision is reached and session consent is granted, automatic digital-arrest warning speech is synthesized via Gnani Timbre and delivered through the WebSocket session. Automatic warning triggering is implemented and test-verified; frontend audio playback controls and revocation/cancellation handling remain pending.
+**Current integration boundary:** Each WebSocket transcript event receives an independent detection result and a cumulative `conversation_detection` result. A connection-scoped `ConversationDetectionAccumulator` retains phrase-based evidence across transcript events within that WebSocket session. The warning policy evaluates cumulative evidence per transcript event, and when a qualifying WARNING decision is reached and session consent is granted, automatic digital-arrest warning speech is synthesized via Gnani Timbre and delivered through the WebSocket session. The frontend provides separate session-scoped warning consent, validates and plays the streamed WAV, and reports playback lifecycle acknowledgements. Automated browser-protocol and mocked backend tests pass; live browser-to-Gnani playback remains pending manual verification.
 
 **Limitations:** Phrase matching is not general contextual understanding. Negation, reported speech, speaker identity and legitimate conversational context are not comprehensively interpreted. No real-world detection accuracy, precision, recall, false-positive rate or false-negative rate has been established.
 
@@ -229,6 +229,19 @@ Automated verification on 2026-11-10:
 - Python compilation: passed.
 - `git diff --check`: passed.
 
+## Stage 4.5 — Browser warning integration
+
+Implemented locally across the React frontend and FastAPI WebSocket:
+
+- The frontend handles the backend's `ready`, `processing`, `transcript`, consent, warning, synthesis-error, playback-status, error and stopped messages. It displays the backend's cumulative detection evidence instead of calling the unimplemented live `/detect` route.
+- Microphone audio is captured and resampled to mono 16 kHz signed 16-bit little-endian PCM in 1,024-byte frames. Microphone track disconnection is surfaced and tears down the session.
+- Microphone/transcription consent remains separate from optional, session-scoped spoken-warning consent.
+- `safety_warning` metadata is paired with the next binary WebSocket frame. The browser validates the warning ID, declared size, RIFF/WAVE chunks, PCM format, sample rate, channels, duration and payload size before playback.
+- Consent revocation and session stop cancel active playback, clear pending warning state and release audio object URLs. A metadata-without-audio timeout is 5 seconds; an unexpectedly long playback is stopped at the larger of 60 seconds or three times the advertised duration plus 10 seconds. Autoplay rejection leaves an explicit Play action.
+- Client reports `received`, `playback_started`, `playback_completed`, `playback_blocked`, `playback_failed` or `cancelled`; the backend validates lifecycle transitions and acknowledges each report. These client reports are separate from server-side WebSocket send acknowledgement and do not prove that a person heard the warning.
+
+Automated browser-protocol and mocked backend tests are implemented. Actual browser playback with live Gnani credentials has not yet been manually verified; Stage 4.5 remains open until that check is completed.
+
 ## Current Test Status
 
 Latest complete backend verification on 2026-11-10:
@@ -237,23 +250,23 @@ Latest complete backend verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection, consent and warning triggering | 39 |
+| WebSocket streaming, lifecycle, detection, consent and warning triggering | 40 |
 | TTS | 13 |
 | Detection schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **117** |
+| **Total** | **118** |
 
-Result: **117 passed, 0 failed, 1 non-failing warning.**
+Result: **118 passed, 0 failed, 1 non-failing warning.**
 
-Environment: Windows, Python 3.11.9, pytest 8.4.2.
+Environment: Windows, Python 3.10.11, pytest 8.4.2.
 
 Additional verification:
 - Python compilation using `python -m compileall -q backend\app backend\tests`: passed.
 - `git diff --check`: passed; Git displayed an informational LF-to-CRLF notice.
 
-The WebSocket tests include per-event detection, cumulative conversation evidence, session-scoped consent grant/revoke, invalid consent rejection and consent reset after reconnect.
+The WebSocket tests include per-event detection, cumulative conversation evidence, session-scoped consent grant/revoke, invalid consent rejection, consent reset after reconnect, and client warning-playback lifecycle acknowledgements. The frontend's WAV and metadata validation suite contains five tests.
 
 Provider tests use mocked Gnani clients. Live integration checks remain separate from automated tests.
 
@@ -282,24 +295,23 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 | Hindi live transcription | One live sample verified; accuracy evaluation pending |
 | Safety-warning playback | Tested for OTP (4.021s at 0.85) and digital-arrest (25.303s at 0.95); confirmed clear and understandable |
 | Environment configuration | Implemented |
-| Automated backend tests | 117 passing, 1 non-failing warning |
+| Automated backend tests | 118 passing, 1 non-failing warning |
 | Automatic warning triggering | Implemented and automated-test verified (WebSocket metadata + binary WAV) |
+| Browser-side warning playback and cancellation | Implemented; automated protocol tests pass; live browser verification pending |
 
 ## Pending Components
 
-1. Frontend consent UI and audio player for spoken safety warnings.
-2. Playback cancellation/revocation handling.
-3. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
-6. Test clean, noisy and telephony-compressed audio.
-7. Complete backend security and API contract review.
-8. Expand and evaluate rule-based scam-stage detection against labelled legitimate and scam conversations.
-9. Implement contextual reasoning and hybrid detection.
-10. Implement explainable and calibrated risk scoring.
-11. Implement consent-based trusted-family notifications.
-12. Implement incident summaries for cybercrime reporting.
-13. Develop Kavach-Bench.
-14. Build the responsive frontend dashboard.
-15. Complete end-to-end, privacy, performance and deployment testing.
+1. Manually verify live browser playback and revocation with configured Gnani credentials.
+2. Evaluate Hindi and Hinglish transcription quality using multiple labelled samples.
+3. Test clean, noisy and telephony-compressed audio.
+4. Complete backend security and API contract review.
+5. Expand and evaluate rule-based detection against labelled legitimate and scam conversations.
+6. Implement contextual reasoning and hybrid detection.
+7. Implement explainable numerical risk scoring.
+8. Implement consent-based trusted-family notifications.
+9. Implement incident summaries for cybercrime reporting.
+10. Develop Kavach-Bench.
+11. Complete end-to-end, privacy, performance and deployment testing.
 
 ## Important Engineering Constraints
 
@@ -314,8 +326,6 @@ The existing Starlette/httpx deprecation warning is non-failing and remains unde
 
 ## Immediate Next Steps
 
-1. Implement frontend consent controls and audio playback in the dashboard.
-2. Define playback cancellation and revocation protocols (Stage 4.5).
-3. Evaluate detection against labelled legitimate and scam conversations.
-4. Implement contextual reasoning and explainable risk scoring.
-5. Continue with trusted-family notifications, incident summaries, Kavach-Bench and dashboard development.
+1. Complete manual live browser playback verification for Stage 4.5.
+2. Start Stage 5 with labelled scam and legitimate conversation regression cases.
+3. Continue with explainable risk scoring, trusted-family notifications, incident summaries and Kavach-Bench.

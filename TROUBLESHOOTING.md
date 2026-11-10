@@ -251,3 +251,25 @@ For every new issue:
 9. Update this guide if the issue is likely to recur.
 
 Never mark a fix as verified without observing the actual result.
+
+## 15. Live browser warning playback
+
+The live WebSocket warning uses two ordered server frames: a JSON `safety_warning` metadata message followed by one binary WAV frame. The browser validates the ID, size, RIFF/WAVE chunks, mono 16 kHz 16-bit PCM format and duration before playback.
+
+If the warning appears as blocked:
+
+- Use the visible **Play warning** control. Browsers can reject automatic playback until the user interacts with the page.
+- Keep the streaming session connected until playback completes or is explicitly cancelled.
+- Check the displayed client status separately from server transmission acknowledgement. A server write does not prove that the browser played the sound.
+
+If playback reports invalid audio:
+
+- Confirm the provider returned a WAV matching the backend's 16 kHz mono 16-bit PCM contract.
+- Check that the warning metadata's byte count and duration match the binary frame.
+- Do not bypass the frontend validator or attempt to play malformed audio.
+
+Revoking spoken-warning consent immediately pauses current playback where possible, clears audio resources and discards a pending frame. This consent is per WebSocket session and is separate from permission to capture/transcribe microphone audio. A new session starts with warning consent disabled.
+
+The browser reports a receive failure if binary audio has not arrived within 5 seconds. A playback that exceeds the greater of 60 seconds or three times the advertised duration plus 10 seconds is stopped and reported as failed. If the browser connection closes, no acknowledgement can be guaranteed; restart a new session and grant consent again if desired.
+
+For live testing, configure `backend/.env`, run the backend, set `VITE_USE_MOCK=false` in `frontend/.env.local`, and use the Live Monitoring page over localhost/HTTPS. Microphone access requires a secure context (localhost is allowed by browsers). Do not use the mock replay as evidence of live provider playback.

@@ -24,7 +24,7 @@ Kavach is an assistance tool, not a guarantee against fraud or a replacement for
 | Async execution | Starlette thread pool | Run synchronous TTS SDK calls without blocking the event loop |
 | Audio processing | Python standard library | PCM validation and WAV construction |
 | Testing | Pytest | Automated verification |
-| Frontend | Planned | Responsive safety dashboard |
+| Frontend | React, TypeScript, Vite | Responsive dashboard, consented PCM capture and warning playback |
 | Database | Planned | Secure incident metadata storage |
 
 ## 3. High-Level Architecture
@@ -33,9 +33,10 @@ The current backend provides REST and WebSocket transcription, phrase-based dete
 
 ```mermaid
 flowchart TD
-    A[User audio] --> B[Kavach FastAPI backend]
-    B --> C[REST /transcribe]
-    B --> D[WebSocket /ws/transcribe]
+    A[User audio] --> F[React browser frontend]
+    F -->|16 kHz PCM frames| D[WebSocket /ws/transcribe]
+    B[Kavach FastAPI backend] --> C[REST /transcribe]
+    B --> D
     C --> E[Gnani Prisma]
     D --> E
     E --> F[Transcript events]
@@ -49,8 +50,9 @@ flowchart TD
     J --> L[Warning policy]
     K --> L
     L -->|should_speak == True| M[Gnani Timbre TTS]
-    M -->|Binary WAV frame| D
-    L -->|safety_warning metadata| D
+    M -->|safety_warning metadata + binary WAV| D
+    D -->|metadata + audio| F
+    F -->|received / started / completed / blocked / failed / cancelled| D
 
     O[Standalone client request] --> P1[POST /synthesize-warning]
     O --> P2[POST /synthesize-digital-arrest-warning]
@@ -60,7 +62,7 @@ flowchart TD
 
 REST transcription invokes phrase-based detection and includes its structured result in the response.
 
-WebSocket transcript events receive independent detection results, cumulative `conversation_detection` results, and explainable `warning_decision` metadata. When cumulative evidence triggers a `WARNING` policy decision and session-scoped consent is granted, digital-arrest safety audio is automatically synthesized via Gnani Timbre in a background thread and dispatched as a JSON metadata event followed by a binary WAV frame.
+WebSocket transcript events receive independent detection results, cumulative `conversation_detection` results, and explainable `warning_decision` metadata. When cumulative evidence triggers a `WARNING` policy decision and session-scoped consent is granted, digital-arrest safety audio is automatically synthesized via Gnani Timbre in a background thread and dispatched as a JSON metadata event followed by a binary WAV frame. The browser validates the metadata and WAV, plays it when permitted, and reports distinct client lifecycle statuses.
 
 Standalone warning policy and TTS endpoints remain accessible. Contextual reasoning, calibrated numerical risk scoring and trusted-family notifications remain planned.
 
@@ -216,7 +218,7 @@ Delivery occurs in two sequentially acknowledged steps:
 1. `safety_warning` JSON message containing decision metadata, rule IDs, audio duration, and byte length sent with `wait_until_sent=True`.
 2. Binary frame containing the raw 16 kHz mono 16-bit linear PCM standard WAV audio sent with `wait_until_sent=True`.
 
-This guarantees server-side transmission acknowledgement; actual client playback orchestration and playback cancellation/revocation remain pending frontend and Stage 4.5 milestones. Errors during synthesis or validation emit a safe `warning_synthesis_error` without disrupting ongoing transcription.
+This confirms server-side WebSocket writes only. The frontend separately reports `received`, `playback_started`, `playback_completed`, `playback_blocked`, `playback_failed` or `cancelled`; the backend validates and acknowledges permitted transitions. These client reports are not proof that a person heard the warning. Frontend and backend lifecycle code is implemented locally, while manual live-provider browser playback remains unverified. Errors during synthesis or validation emit a safe `warning_synthesis_error` without disrupting ongoing transcription.
 
 ### 4.5 Standalone Gnani Timbre Text-to-Speech Endpoints
 
@@ -473,20 +475,19 @@ The WebSocket backend implements explicit grant/revoke handling for automatic sp
 
 Consent defaults to disabled, is scoped to one connection and resets on reconnect. Strict Boolean validation prevents malformed values from enabling consent.
 
-The frontend consent UI, warning-policy integration and audio playback/revocation orchestration remain pending.
+The frontend exposes microphone consent separately from session-scoped warning consent. It sends `warning_consent` after the server's `ready` event, reports acknowledgement, and revokes consent and stops or discards pending playback when the user revokes or stops the session.
 
-## 6. Planned Safety Response and Integration
+## 6. Warning Response and Remaining Integration
 
-The future warning workflow will:
+The end-to-end warning workflow currently:
 
 1. Receive transcript events from the transcription service.
 2. Evaluate transcript content using rule-based and contextual detection.
-3. Calculate an explainable risk score.
-4. Apply a warning policy to determine whether a spoken warning is appropriate.
-5. Invoke the existing Gnani Timbre service when the policy triggers.
-6. Explain safe actions, such as ending the call and independently verifying the caller.
-7. Offer trusted-family notification only with the user's consent.
-8. Generate an incident summary that can support a cybercrime report.
+3. Apply the existing explainable warning policy to cumulative evidence.
+4. Invoke Gnani Timbre when the policy and explicit session consent permit.
+5. Deliver metadata and a WAV frame to the browser.
+6. Validate and play the audio in-browser, then report client playback state.
+7. Leave contextual reasoning, numerical risk scoring, trusted-family notifications and incident summaries as future work.
 
 **Already implemented:**
 
@@ -497,6 +498,8 @@ The future warning workflow will:
 - Cumulative conversation-level evidence aggregation within each WebSocket connection.
 - Independent explainable warning policy (`evaluate_warning_policy`).
 - Session-scoped WebSocket consent protocol for automatic spoken safety warnings.
+- Frontend WebSocket transcript and warning handling, WAV validation/playback, consent revocation and cleanup.
+- Client playback lifecycle reporting with backend transition validation and acknowledgements.
 - Standalone Gnani Timbre warning synthesis endpoints (`POST /synthesize-warning` and `POST /synthesize-digital-arrest-warning`).
 
 **Remaining integration work:**
@@ -504,11 +507,11 @@ The future warning workflow will:
 1. Add contextual reasoning to assess conversational meaning.
 2. Implement explainable risk scoring and validate thresholds using labelled data.
 3. Define a safe warning policy.
-4. Integrate detection-triggered warning delivery through Gnani Timbre.
+4. Manually verify live browser playback with configured Gnani credentials.
 5. Implement consent-based trusted-family notifications.
 6. Generate incident summaries supporting cybercrime reporting.
 
-Automatic detection-to-warning orchestration is not yet implemented.
+Manual live browser playback verification is still required before Stage 4.5 is complete.
 
 ## 7. Privacy and Security
 
@@ -536,6 +539,7 @@ Current test files:
 - `test_detection_engine.py`
 - `test_conversation_detection.py`
 - `test_warning_policy.py`
+- `frontend/src/services/warningProtocol.test.ts`
 
 Latest complete automated verification on 2026-11-10:
 
@@ -543,15 +547,15 @@ Latest complete automated verification on 2026-11-10:
 |---|---:|
 | Health endpoint | 1 |
 | REST transcription | 10 |
-| WebSocket streaming, lifecycle, detection and consent | 22 |
+| WebSocket streaming, lifecycle, detection, consent and warning playback status | 40 |
 | TTS service and endpoint | 13 |
 | Detection data schemas | 8 |
 | Detection engine | 31 |
 | Conversation detection | 4 |
 | Warning policy | 11 |
-| **Total** | **100** |
+| **Total** | **118** |
 
-Result: **100 passed, 0 failed, 1 non-failing Starlette deprecation warning.**
+Result: **118 passed, 0 failed, 1 non-failing Starlette deprecation warning.** The frontend warning protocol suite has 5 passing tests and the production build passes.
 
 The WebSocket suite includes detection-integration tests, cumulative conversation evidence tests and consent grant/revoke, invalid-value rejection and reconnect reset tests. These use a mocked Gnani SDK client and verify application behaviour, not live provider detection accuracy.
 

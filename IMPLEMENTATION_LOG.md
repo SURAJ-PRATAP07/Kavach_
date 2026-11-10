@@ -948,6 +948,27 @@ Stage 4.4 implements consent-governed warning synthesis and server-side WebSocke
 
 A successful server-side transmission acknowledgement does not prove that the user's browser played the warning.
 
-Frontend playback, browser playback acknowledgement, and cancellation or revocation handling during playback remain pending for Stage 4.5.
+Stage 4.5 browser integration is implemented locally as recorded below. Full browser-to-Gnani end-to-end warning playback has not yet been live-verified.
 
-The automatic warning integration has automated mock-based coverage; full browser-to-Gnani end-to-end warning playback has not yet been live-verified.
+---
+
+## Stage 4.5 — Frontend integration and browser-side warning playback
+
+### Implemented
+
+- Integrated the existing React frontend with the actual `/ws/transcribe` message contract. Transcript detection panels now use the backend-provided per-event and cumulative evidence rather than calling the unimplemented `/detect` endpoint in the live streaming path.
+- Added runtime validation for server messages and streamed safety-warning metadata. Each warning is paired with the next binary frame, and the WAV validator checks RIFF/WAVE boundaries, declared size, PCM encoding, mono channel count, 16 kHz sample rate, 16-bit samples, audio duration and a 5 MiB maximum payload.
+- Added browser audio playback with visible states for receipt, playback, browser autoplay blocking, completion, validation failure and cancellation. Audio object URLs are revoked on completion, failure, consent revocation, session stop and teardown.
+- Added distinct user controls for microphone/transcription consent and per-session spoken-warning consent. Warning consent defaults to off, is sent after the backend `ready` event, and is not reused when a new WebSocket session starts.
+- Added consent-revocation race handling: pending audio is marked cancelled and discarded if it arrives after revocation; active playback is paused. The browser reports lifecycle states to the server.
+- Added a server-side `warning_playback` control command with per-warning ID validation, strict lifecycle transition checks and `warning_playback_status_updated` acknowledgements. Server send acknowledgement remains distinct from client receipt and playback reports.
+- Added microphone-track disconnection handling and explicit user-visible errors for malformed or unsupported WebSocket messages.
+- Added frontend protocol tests for accepted/rejected metadata, stream message parsing, valid PCM WAV data, incorrect sample rates, size mismatch and malformed/truncated WAV containers.
+
+### Verification
+
+- Fresh backend baseline before changes: **117 passed, 1 non-failing deprecation warning**.
+- Stage 4.5 WebSocket lifecycle regression: **40 tests**.
+- Frontend warning protocol suite: **5 passed**.
+- Frontend TypeScript production build: passed.
+- Manual live browser playback with Gnani credentials: **not yet performed**. Do not mark Stage 4.5 fully complete until this is verified.

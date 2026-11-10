@@ -960,3 +960,41 @@ Duration: 29.20 seconds.
 - Python compilation: `.\backend\.venv\Scripts\python.exe -m compileall -q backend\app backend\tests` passed.
 - `git diff --check`: passed.
 - The remaining Starlette deprecation warning concerns using `httpx` with `starlette.testclient`; it does not cause test failures.
+
+---
+
+## Test Report — Stage 4.5 Browser Warning Protocol
+
+**Date:** 2026-11-10
+
+### Environment and baseline
+
+- Operating system: Windows
+- Python used for this run: 3.10.11
+- pytest: 8.4.2
+- Node/npm: installed from the selected frontend environment
+- Fresh pre-change backend baseline: **117 passed, 1 non-failing Starlette deprecation warning**
+
+### Automated verification after Stage 4.5 changes
+
+| Check | Result |
+|---|---|
+| Complete backend suite | **118 passed, 0 failed, 1 non-failing deprecation warning** |
+| `backend/tests/test_streaming.py` | **40 passed** |
+| Targeted playback lifecycle test | **1 passed** |
+| Frontend warning metadata/WAV tests | **5 passed** |
+| Frontend TypeScript and production build | Passed |
+| Frontend lint | Passed with pre-existing React purity/effect warnings |
+| Python compilation | Passed |
+| `git diff --check` | Passed |
+
+The backend lifecycle test verifies that client-reported warning receipt, playback start and playback completion are acknowledged as separate states, and that an invalid transition is rejected. Frontend tests validate metadata and WAV payload boundaries, PCM audio format, duration and malformed/truncated-container handling.
+
+### Behaviour and limitations
+
+- The frontend processes the actual backend `ready`, `processing`, `transcript`, consent, synthesis-error, warning metadata/binary, playback-status, error and stopped message shapes.
+- Server-side transmission acknowledgement is not treated as browser receipt or playback. Client lifecycle reports are separately validated and acknowledged.
+- Consent revocation or session stop cancels active playback and discards queued audio where possible. If audio has not arrived within 5 seconds, the client reports a receive timeout. Playback completion has a bounded timeout based on the advertised duration.
+- Browser autoplay restrictions are surfaced as a blocked state with an explicit Play action.
+- Tests use mocked provider output; no live Gnani warning was delivered to this browser during this validation. Manual browser-to-live-provider playback, permission denial, and real-device microphone disconnection remain to be verified.
+- The Starlette `httpx` TestClient deprecation warning remains non-failing and was not suppressed.

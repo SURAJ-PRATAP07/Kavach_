@@ -8,7 +8,7 @@ The project is being developed for the Gnani AI Great Indian AI Internship Chall
 
 ## Current development status
 
-**Milestones 0–4.2 + Detection Integrations + Stages 3, 4.1, 4.2, 4.3 & 4.4: Backend scaffold, Gnani speech integrations, detection schemas, initial phrase-based detection engine, REST/WebSocket detection integrations, conversation-level evidence aggregation, explainable warning policy, session-scoped warning consent protocol, digital-arrest warning synthesis, and automated warning triggering via WebSockets.**
+**Backend milestones 0–4.4 are implemented and verified. Stage 4.5 browser integration is implemented locally; live browser-to-Gnani playback still needs manual verification.**
 
 Currently implemented and verified:
 
@@ -27,11 +27,13 @@ Currently implemented and verified:
 - Explainable warning policy (`evaluate_warning_policy`): deterministic heuristic evaluation with distinct-stage thresholds (MONITOR, ADVISORY, WARNING), consent gating, and repeat-warning suppression.
 - Backend WebSocket consent protocol for automatic spoken safety warnings, with strict Boolean validation, grant/revoke acknowledgements and session reset on reconnect.
 - Automated warning triggering pipeline: evaluates warning policy against cumulative evidence on every transcript event, synthesizes digital-arrest warning audio via Gnani Timbre upon reaching `WARNING` level with granted consent, validates WAV audio parameters, enforces a bounded single-attempt retry policy, and delivers JSON `safety_warning` metadata followed by binary WAV audio frames with transmission acknowledgement.
-- Automated backend tests: **117 passed, 0 failed, 1 non-failing deprecation warning**.
+- React/TypeScript frontend with a responsive dashboard, 16 kHz PCM microphone capture, transcript/evidence display, separate session warning consent, validated streamed WAV playback, cancellation, and client playback lifecycle acknowledgements.
+- Automated backend tests: **118 passed, 0 failed, 1 non-failing deprecation warning**.
+- Frontend protocol tests: **5 passed**; TypeScript production build passes.
 
 The live transcription checks verify integration and event delivery, not general recognition accuracy. The live TTS check verifies the tested warning phrases and voice/settings, not broad Hindi/Hinglish quality.
 
-**Not yet implemented:** contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, frontend consent UI and audio player, playback cancellation/revocation handling (Stage 4.5), trusted-family notifications, incident summaries, the frontend dashboard and Kavach-Bench.
+**Still pending:** manual live browser playback verification, contextual scam reasoning, general negation and quoted-speech understanding, calibrated numerical risk scoring, trusted-family notifications, incident summaries, Kavach-Bench evaluation, deployment, and final end-to-end testing.
 
 ## Planned capabilities
 
@@ -97,7 +99,7 @@ When consent is granted and scam escalation reaches `WARNING` level, digital-arr
 | Configuration | Pydantic Settings |
 | HTTP client | HTTPX |
 | Speech transcription | Gnani Prisma v2.5 |
-| Frontend | React, TypeScript (planned) |
+| Frontend | React, TypeScript, Vite |
 | Testing | Pytest |
 | Version control | Git, GitHub |
 
@@ -105,7 +107,7 @@ Additional technologies will be documented when implemented and verified.
 
 ## Repository structure
 
-`	ext
+```text
 Kavach/
 |
 |-- backend/
@@ -134,6 +136,16 @@ Kavach/
 |   |
 |   |-- .env.example
 |   |-- requirements.txt
+|
+|-- frontend/
+|   |-- src/
+|   |   |-- hooks/useLiveSession.ts
+|   |   |-- services/audioCapture.ts
+|   |   |-- services/warningProtocol.ts
+|   |   |-- services/warningProtocol.test.ts
+|   |   `-- pages/
+|   |-- package.json
+|   `-- vite.config.ts
 |
 |-- PROJECT_STATE.md
 |-- ARCHITECTURE.md
@@ -220,12 +232,35 @@ The development server should be available at:
 Open another PowerShell terminal, activate the same virtual environment and run:
 
 ```powershell
-cd C:\Users\Vaibhavi\Kavach\backend
+cd backend
 
 .\.venv\Scripts\Activate.ps1
 
 python -m pytest -v
 ```
+
+### 7. Start the frontend
+
+Open another PowerShell terminal from the repository root:
+
+```powershell
+cd frontend
+npm ci
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+The frontend is available at http://localhost:5173. Mock mode is enabled by default. For local backend streaming, keep the backend running on port 8000 and set `VITE_USE_MOCK=false` in `frontend/.env.local`.
+
+Frontend checks:
+
+```powershell
+npm test
+npm run build
+npm run lint
+```
+
+The streamed warning integration is automated-test covered, but live browser-to-Gnani audio playback still requires manual verification with working backend credentials.
 
 ## Current API endpoint
 
@@ -306,15 +341,17 @@ Only JSON Boolean values are accepted. The backend acknowledges valid changes an
 
 This protocol controls automatic spoken safety warnings only. It does not represent consent for audio capture, transcription or analysis.
 
-The backend consent protocol and automatic warning/TTS integration are implemented. Frontend consent controls, browser-side audio playback, playback confirmation and playback cancellation/revocation handling remain pending (Stage 4.5).
+The frontend sends the existing session-scoped consent command independently of microphone consent. It validates warning metadata and the associated mono 16 kHz 16-bit PCM WAV frame, reports browser receipt/playback lifecycle states, and stops queued or active playback on consent revocation or session stop. These client reports distinguish observed browser states from successful server transmission; they are not proof that a person heard the warning.
+
+The browser playback implementation is covered by metadata/WAV validation tests and the backend acknowledgement protocol by WebSocket tests. A manual browser-to-live-Gnani playback run has not yet been performed, so Stage 4.5 is not marked fully complete.
 
 ### Automated testing
 
-Latest complete backend verification on 2026-11-10: **117 passed, 0 failed, 1 non-failing deprecation warning**.
+Latest complete backend verification on 2026-11-10: **118 passed, 0 failed, 1 non-failing deprecation warning**.
 
-The streaming test file passes 39 tests, including metadata and binary warning-delivery failure simulations.
+The streaming test file passes 40 tests, including metadata and binary warning-delivery failure simulations and client-reported warning playback lifecycle states.
 
-The test suite covers REST and WebSocket transcription, 39 WebSocket streaming tests (including warning triggering, delivery acknowledgement and failure-path simulations), 13 TTS service and endpoint tests, phrase-based detection, cumulative evidence aggregation, and the explainable warning policy.
+The test suite covers REST and WebSocket transcription, 40 WebSocket streaming tests (including warning triggering, delivery acknowledgement and failure-path simulations), 13 TTS service and endpoint tests, phrase-based detection, cumulative evidence aggregation, and the explainable warning policy. The frontend warning protocol suite has 5 tests.
 
 Automated provider tests use mocked responses. Separate live checks have verified Prisma REST transcription, Prisma WebSocket event delivery and standalone Timbre warning synthesis for both OTP and digital-arrest warnings.
 
@@ -358,13 +395,15 @@ The passing automated backend tests do not establish real-world scam detection a
 - [x] Cumulative conversation-level evidence aggregation (WebSocket, per-connection).
 - [x] Explainable warning policy (standalone decision heuristics & consent gating).
 - [x] Backend session-scoped consent protocol for automatic spoken safety warnings.
-- [ ] Frontend consent UI for spoken safety warnings.
+- [x] Separate frontend consent control for spoken safety warnings.
+- [x] Browser-side WAV validation, playback, cancellation and client lifecycle acknowledgements (automated verification).
+- [ ] Manual browser-to-live-Gnani playback and cancellation verification.
 - [ ] Contextual scam-stage detection and improved negation/context handling.
 - [ ] Evaluation against labelled legitimate and scam conversations.
 - [x] Warning-policy integration with WebSocket streaming.
 - [x] Standalone Gnani Timbre TTS endpoints for OTP and digital-arrest warnings (live-verified).
 - [x] Consent-based automatic warning triggering and server-side TTS audio delivery.
-- [ ] Frontend dashboard and consent workflow.
+- [x] Responsive frontend dashboard and live transcript workflow (dashboard-only planned APIs remain mock or unavailable).
 - [ ] Trusted-family notifications.
 - [ ] Incident summary generation.
 - [ ] Kavach-Bench evaluation.

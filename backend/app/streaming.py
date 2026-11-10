@@ -6,6 +6,7 @@ import math
 import struct
 import wave
 from io import BytesIO
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
@@ -91,6 +92,34 @@ CONNECT_TIMEOUT_SECONDS = 10.0
 SEND_AUDIO_TIMEOUT_SECONDS = 5.0
 FINAL_TRANSCRIPT_TIMEOUT_SECONDS = 3.0
 CLEANUP_TIMEOUT_SECONDS = 5.0
+WARNING_PLAYBACK_STATUSES = {
+    "received",
+    "playback_started",
+    "playback_completed",
+    "playback_blocked",
+    "playback_failed",
+    "cancelled",
+}
+WARNING_PLAYBACK_TRANSITIONS = {
+    "metadata_sent": {"playback_failed", "cancelled"},
+    "transmitted": {"received", "playback_failed", "cancelled"},
+    "received": {
+        "playback_started",
+        "playback_blocked",
+        "playback_failed",
+        "cancelled",
+    },
+    "playback_blocked": {
+        "playback_started",
+        "playback_failed",
+        "cancelled",
+    },
+    "playback_started": {
+        "playback_completed",
+        "playback_failed",
+        "cancelled",
+    },
+}
 
 
 class SessionFailure(Exception):
@@ -205,6 +234,8 @@ async def stream_transcription(
     warning_attempted = False
     warning_already_sent = False
     warning_in_progress = False
+    active_warning_id = None
+    warning_playback_status = None
     stop_requested = asyncio.Event()
     transcript_received_after_stop = asyncio.Event()
     provider_error = asyncio.Event()
@@ -308,6 +339,7 @@ async def stream_transcription(
         """Forward provider events and detect provider errors."""
 
         nonlocal warning_attempted, warning_already_sent, warning_in_progress
+        nonlocal active_warning_id, warning_playback_status
 
         async for event in client.events():
             payload = serialize_provider_event(event)
@@ -412,9 +444,13 @@ async def stream_transcription(
                         continue
 
                     # Transmit JSON metadata first and wait for successful delivery.
+                    warning_id = uuid4().hex
+                    active_warning_id = warning_id
+                    warning_playback_status = "metadata_sent"
                     meta_sent = await enqueue_message(
                         {
                             "type": "safety_warning",
+                            "warning_id": warning_id,
                             "level": decision.level.value,
                             "reason_codes": list(decision.reason_codes),
                             "matched_rule_ids": list(decision.matched_rule_ids),
@@ -432,18 +468,24 @@ async def stream_transcription(
                     )
 
                     if not meta_sent:
+                        active_warning_id = None
+                        warning_playback_status = None
                         logger.warning(
                             "Failed to deliver safety_warning metadata to client."
                         )
                         continue
 
                     # Deliver the actual WAV audio as a binary frame and wait for delivery.
+                    if warning_playback_status == "metadata_sent":
+                        warning_playback_status = "transmitted"
                     binary_sent = await enqueue_message(
                         audio_bytes,
                         wait_until_sent=True,
                     )
 
                     if not binary_sent:
+                        active_warning_id = None
+                        warning_playback_status = None
                         logger.warning(
                             "Failed to deliver safety_warning binary audio to client."
                         )
@@ -739,6 +781,55 @@ async def stream_transcription(
                 await enqueue_message({
                     "type": "error",
                     "message": "Invalid control command. Expected a JSON object.",
+                })
+                continue
+
+            if command.get("type") == "warning_playback":
+                warning_id = command.get("warning_id")
+                status = command.get("status")
+
+                if (
+                    not isinstance(warning_id, str)
+                    or not isinstance(status, str)
+                    or status not in WARNING_PLAYBACK_STATUSES
+                ):
+                    await enqueue_message({
+                        "type": "warning_playback_status_error",
+                        "message": (
+                            "Invalid warning playback status. A warning ID and "
+                            "supported lifecycle status are required."
+                        ),
+                    })
+                    continue
+
+                if warning_id != active_warning_id:
+                    await enqueue_message({
+                        "type": "warning_playback_status_error",
+                        "message": "The warning is not active in this session.",
+                    })
+                    continue
+
+                allowed_statuses = WARNING_PLAYBACK_TRANSITIONS.get(
+                    warning_playback_status,
+                    set(),
+                )
+                if status not in allowed_statuses:
+                    await enqueue_message({
+                        "type": "warning_playback_status_error",
+                        "message": "Invalid warning playback lifecycle transition.",
+                    })
+                    continue
+
+                warning_playback_status = status
+                logger.info(
+                    "Client reported warning playback status: %s",
+                    status,
+                )
+                await enqueue_message({
+                    "type": "warning_playback_status_updated",
+                    "warning_id": warning_id,
+                    "status": status,
+                    "message": "Warning playback status received.",
                 })
                 continue
 

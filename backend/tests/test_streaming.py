@@ -1115,6 +1115,92 @@ def test_warning_delivery_acknowledgement_marks_sent_on_success(
     assert any(m["type"] == "safety_warning" for m in json_messages)
 
 
+def test_client_warning_playback_lifecycle_is_acknowledged(
+    configured_client,
+    monkeypatch,
+):
+    """Browser receipt and playback transitions are distinct from server delivery."""
+    dummy_wav = _make_dummy_wav()
+    monkeypatch.setattr(
+        streaming,
+        "synthesize_digital_arrest_warning",
+        lambda api_key: dummy_wav,
+    )
+    FakeGnaniStreamClient.transcript_events = [
+        StreamTranscriptEvent("Transfer your money to a safe account."),
+        StreamTranscriptEvent("You will be arrested."),
+    ]
+
+    original_send_audio = FakeGnaniStreamClient.send_audio
+
+    async def send_audio_with_transcripts(client, chunk):
+        await original_send_audio(client, chunk)
+        if chunk != bytes(streaming.FRAME_BYTES) and not getattr(
+            client,
+            "warning_test_events_sent",
+            False,
+        ):
+            client.warning_test_events_sent = True
+            for event in FakeGnaniStreamClient.transcript_events:
+                await client.event_queue.put(event)
+
+    monkeypatch.setattr(
+        FakeGnaniStreamClient,
+        "send_audio",
+        send_audio_with_transcripts,
+    )
+
+    with configured_client.websocket_connect("/ws/transcribe") as websocket:
+        assert websocket.receive_json()["type"] == "ready"
+        websocket.send_text(json.dumps({
+            "type": "warning_consent",
+            "granted": True,
+        }))
+        assert websocket.receive_json()["type"] == "warning_consent_updated"
+        websocket.send_bytes(b"\x01" * streaming.FRAME_BYTES)
+
+        warning = None
+        audio = None
+        while audio is None:
+            raw = websocket.receive()
+            if "text" in raw:
+                message = json.loads(raw["text"])
+                if message["type"] == "safety_warning":
+                    warning = message
+            elif "bytes" in raw:
+                audio = raw["bytes"]
+
+        assert warning is not None
+        assert len(warning["warning_id"]) == 32
+        assert audio == dummy_wav
+
+        warning_id = warning["warning_id"]
+        websocket.send_text(json.dumps({
+            "type": "warning_playback",
+            "warning_id": warning_id,
+            "status": "playback_completed",
+        }))
+        invalid_transition = websocket.receive_json()
+        assert invalid_transition["type"] == "warning_playback_status_error"
+
+        for status in ("received", "playback_started", "playback_completed"):
+            websocket.send_text(json.dumps({
+                "type": "warning_playback",
+                "warning_id": warning_id,
+                "status": status,
+            }))
+            acknowledgement = websocket.receive_json()
+            assert acknowledgement["type"] == "warning_playback_status_updated"
+            assert acknowledgement["warning_id"] == warning_id
+            assert acknowledgement["status"] == status
+
+        websocket.send_text(json.dumps({"type": "stop"}))
+        while True:
+            message = websocket.receive_json()
+            if message["type"] == "stopped":
+                break
+
+
 def test_warning_tts_failure_does_not_retry_on_later_transcripts(
     configured_client,
     monkeypatch,
